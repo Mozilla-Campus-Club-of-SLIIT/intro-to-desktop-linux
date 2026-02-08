@@ -1,29 +1,30 @@
-[tools]
-go = "1.24.5"
-"go:golang.org/x/tools/gopls" = "0.21.0"
+[settings]
+experimental = true
 
-[tasks.check]
-description = "Verify OS is Arch Linux and archiso is installed"
-run = """
-bash -c '
-  # 1. Check for Arch Linux
-  if [ -f /etc/os-release ] && grep -q "Arch Linux" /etc/os-release; then
-    echo "✅ Arch Linux detected."
-  else
-    echo "❌ Error: Arch Linux required." && exit 1
-  fi
+[hooks]
+enter = """
+if ! command -v podman >/dev/null 2>&1; then
 
-  # 2. Check for archiso and install if missing
-  if ! command -v mkarchiso &> /dev/null; then
-    echo "📦 archiso not found. Installing..."
-    sudo pacman -S --noconfirm archiso
-  else
-    echo "✅ archiso is already installed."
-  fi
-'
+    # 2. Check if os-release file exists
+    if [ -f /etc/os-release ]; then
+
+        # 3. Check for Arch Linux
+        if grep -q "Arch Linux" /etc/os-release; then
+            echo "📦 Arch Linux detected. Installing podman..."
+            sudo pacman -S --noconfirm podman
+
+        # 4. Check for Ubuntu (Use apt, not pacman!)
+        elif grep -q "Ubuntu" /etc/os-release; then
+            echo "📦 Ubuntu detected. Installing podman..."
+            sudo apt-get update
+            sudo apt-get install -y podman
+
+        else
+            echo "⚠️ OS detected but not supported. Please install Podman manually."
+        fi
+
+    else
+        echo "⚠️ /etc/os-release not found. Cannot detect OS."
+    fi
+fi
 """
-
-[tasks.build-os]
-description = "Build the Live ISO"
-depends = ["check"]
-run = "echo '🚀 Building the OS...'"

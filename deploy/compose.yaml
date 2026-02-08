@@ -1,0 +1,19 @@
+services:
+  database:
+    image: docker.io/valkey/valkey:latest
+    container_name: detachment-db
+    ports:
+      - "6379:6379"
+    restart: always
+
+  api-server:
+    build:
+      context: ..
+      dockerfile: deploy/Containerfile
+    container_name: detachment-api
+    depends_on:
+      - database
+    ports:
+      - "50051:50051"
+    environment:
+      - DB_ADDR=database:6379

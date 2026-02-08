@@ -9,4 +9,4 @@ bin/
 *.pb.go
 
 # Mise / Tooling
-.mise.local.toml
+.miserc.toml

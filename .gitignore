@@ -1,0 +1,12 @@
+# Go Binaries
+bin/
+
+# ArchISO Build Artifacts
+/mozilive/work/
+/mozilive/out/
+
+# Protobuf Generated Files
+*.pb.go
+
+# Mise / Tooling
+.mise.local.toml

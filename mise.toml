@@ -28,3 +28,9 @@ if ! command -v podman >/dev/null 2>&1; then
     fi
 fi
 """
+
+[tasks."run:presenter"]
+description = "Run the TUI in presenter mode"
+env = { APP_ENV = "presenter" }
+run = 'go run -ldflags="-X main.environment=$APP_ENV" cmd/shell/main.go'
+alias = "p"

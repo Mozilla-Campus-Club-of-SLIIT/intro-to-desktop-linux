@@ -1,8 +1,40 @@
 package ui
 
-import "github.com/charmbracelet/lipgloss"
+import (
+	tea "github.com/charmbracelet/bubbletea"
+	"github.com/charmbracelet/lipgloss"
+)
 
-func (m *RootModel) render() string {
+type DashboardModel struct {
+	width       int
+	height      int
+	environment string
+
+	content     ContentModel
+	leaderboard LeaderboardModel
+}
+
+func (m *DashboardModel) Init() tea.Cmd {
+	return nil
+}
+
+func (m *DashboardModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
+	switch msg := msg.(type) {
+	case tea.WindowSizeMsg:
+		m.width = msg.Width
+		m.height = msg.Height
+	}
+	return m, nil
+}
+
+func (m *DashboardModel) View() string {
+	if m.width <= 0 || m.height <= 0 {
+		return "Initializing..."
+	}
+	return m.render()
+}
+
+func (m *DashboardModel) render() string {
 	const footerHeight = 1
 	const margin = 2
 	const gap = 2

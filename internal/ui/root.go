@@ -1,7 +1,6 @@
 package ui
 
 import (
-	"github.com/Mozilla-Campus-Club-of-SLIIT/intro-to-desktop-linux/internal/engine"
 	tea "github.com/charmbracelet/bubbletea"
 )
 
@@ -12,7 +11,6 @@ type RootModel struct {
 
 	content     ContentModel
 	leaderboard LeaderboardModel
-	resizeState ResizeState
 }
 
 func (m *RootModel) Init() tea.Cmd {
@@ -21,11 +19,6 @@ func (m *RootModel) Init() tea.Cmd {
 
 func (m *RootModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	var cmd tea.Cmd
-
-	resizeCmd := m.resizeState.HandleResizeUpdate(msg)
-	if resizeCmd != nil {
-		cmd = tea.Batch(cmd, resizeCmd)
-	}
 
 	switch msg := msg.(type) {
 	case tea.WindowSizeMsg:
@@ -45,10 +38,6 @@ func (m *RootModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 func (m *RootModel) View() string {
 	if m.width <= 0 || m.height <= 0 {
 		return "Initializing..."
-	}
-
-	if m.resizeState.IsResizing {
-		return engine.ClearAllImages() + resizeView(m.width, m.height)
 	}
 
 	return m.render()

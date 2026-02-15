@@ -39,7 +39,6 @@ func (m *RootModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 	}
 
-	// Delegate all other messages to the active model.
 	if m.activeModel != nil {
 		m.activeModel, cmd = m.activeModel.Update(msg)
 	}
@@ -64,9 +63,7 @@ func Bootstrap(env string) error {
 			leaderboard: LeaderboardModel{environment: env},
 		}
 	} else {
-		activeModel = &AuthModel{
-			environment: env,
-		}
+		activeModel = NewAuthModel(env)
 	}
 
 	root := &RootModel{

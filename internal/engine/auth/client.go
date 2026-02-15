@@ -1,5 +1,11 @@
 package auth
 
+var isAuthenticated bool = false
+
 func VerifyAuth() bool {
-	return true
+	return isAuthenticated
+}
+
+func AuthUser() {
+	isAuthenticated = true
 }

@@ -3,26 +3,41 @@ package ui
 import "github.com/charmbracelet/lipgloss"
 
 func (m *RootModel) render() string {
-	// Footer height is 1 cell
-	footerHeight := 1
-	mainHeight := m.height - footerHeight
+	const footerHeight = 1
+	const margin = 2
+	const gap = 2
 
-	// Sidebar is 25% (4/16), Content is 75% (12/16)
-	sidebarWidth := m.width / 4
-	contentWidth := m.width - sidebarWidth
+	width := m.width - 2*margin
+	height := m.height - 2*(margin/4)
 
-	sidebar := BorderStyle.
-		Width(sidebarWidth - 2). // -2 for borders
-		Height(mainHeight - 2).  // -2 for borders
-		Render(m.leaderboardView())
+	m.leaderboard.width = (width - 2*gap) / 4
+	m.content.width = (width - 2*gap) - m.leaderboard.width
 
-	content := BorderStyle.
-		Width(contentWidth - 2). // -2 for borders
-		Height(mainHeight - 2).  // -2 for borders
-		Render(m.contentView())
+	m.content.height = height - footerHeight - gap
+	m.leaderboard.height = m.content.height
 
-	footer := m.footerView()
+	leaderboard := lipgloss.NewStyle().
+		Width(m.leaderboard.width).
+		Height(m.leaderboard.height).
+		Render(m.leaderboard.View())
 
-	mainArea := lipgloss.JoinHorizontal(lipgloss.Top, content, sidebar)
-	return lipgloss.JoinVertical(lipgloss.Left, mainArea, footer)
+	content := lipgloss.NewStyle().
+		Width(m.content.width).
+		Height(m.content.height).
+		Render(m.content.View())
+
+	footer := m.footerView(width)
+
+	spacer := lipgloss.NewStyle().Width(gap).Render("")
+	mainArea := lipgloss.JoinHorizontal(lipgloss.Top, content, spacer, leaderboard)
+
+	ui := lipgloss.JoinVertical(lipgloss.Left, mainArea, footer)
+
+	return lipgloss.Place(
+		m.width,
+		m.height,
+		lipgloss.Center,
+		lipgloss.Center,
+		ui,
+	)
 }

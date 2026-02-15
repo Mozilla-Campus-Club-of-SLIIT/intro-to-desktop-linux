@@ -9,10 +9,6 @@ var (
 	ColorWarmRed     = lipgloss.Color("#FF4F5E")
 	ColorDarkGreen   = lipgloss.Color("#005E5E")
 
-	BorderStyle = lipgloss.NewStyle().
-			Border(lipgloss.RoundedBorder()).
-			BorderForeground(ColorLemonYellow)
-
 	FooterStyle = lipgloss.NewStyle().
 			Foreground(ColorBlack).
 			Background(ColorLemonYellow).

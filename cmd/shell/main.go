@@ -13,7 +13,7 @@ var (
 
 func main() {
 	if err := ui.Bootstrap(environment); err != nil {
-		fmt.Printf("Alas, there's been an error: %v", err)
+		fmt.Printf("🚨 System malfunction! The penguins are panicked: %v\n", err)
 		os.Exit(1)
 	}
 }

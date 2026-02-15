@@ -1,6 +1,7 @@
 package ui
 
 import (
+	"fmt"
 	"strings"
 
 	"github.com/Mozilla-Campus-Club-of-SLIIT/intro-to-desktop-linux/internal/engine/auth"
@@ -10,10 +11,19 @@ import (
 	"github.com/charmbracelet/lipgloss"
 )
 
+// authStatusMsg is sent when authentication completes
+type authStatusMsg struct {
+	success bool
+	err     error
+}
+
+// authProgressMsg is sent during authentication
+type authProgressMsg string
+type switchToDashboardMsg struct{}
+
 type AuthModel struct {
 	width               int
 	height              int
-	environment         string
 	viewport            viewport.Model
 	textinput           textinput.Model
 	messages            []string
@@ -21,9 +31,11 @@ type AuthModel struct {
 	mozStyle            lipgloss.Style
 	whiteStyle          lipgloss.Style
 	unknownCommandCount int
+	authenticating      bool
 }
 
-func NewAuthModel(env string) *AuthModel {
+func NewAuthModel() *AuthModel {
+
 	const chatWidth = 80
 
 	ti := textinput.New()
@@ -50,7 +62,6 @@ func NewAuthModel(env string) *AuthModel {
 	vp.GotoBottom()
 
 	return &AuthModel{
-		environment: env,
 		textinput:   ti,
 		viewport:    vp,
 		messages:    messages,
@@ -62,6 +73,16 @@ func NewAuthModel(env string) *AuthModel {
 
 func (m *AuthModel) Init() tea.Cmd {
 	return textinput.Blink
+}
+
+// performAuth is a command that performs authentication
+func performAuth() tea.Msg {
+	// Send progress message
+	err := auth.AuthUser()
+	return authStatusMsg{
+		success: err == nil,
+		err:     err,
+	}
 }
 
 func (m *AuthModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
@@ -77,18 +98,48 @@ func (m *AuthModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case tea.WindowSizeMsg:
 		m.width, m.height = msg.Width, msg.Height
 
+	case authProgressMsg:
+		m.messages = append(m.messages, lipgloss.JoinHorizontal(lipgloss.Left, m.mozStyle.Render("moz: "), m.whiteStyle.Render(string(msg))))
+		m.viewport.SetContent(strings.Join(m.messages, "\n"))
+		m.viewport.GotoBottom()
+
+	case authStatusMsg:
+		m.authenticating = false
+		if msg.success {
+
+			// Return command to switch to dashboard
+			return m, func() tea.Msg {
+				return switchToDashboardMsg{}
+			}
+		} else {
+			errorMsg := "Authentication failed"
+			if msg.err != nil {
+				errorMsg = fmt.Sprintf("Authentication failed: %v", msg.err)
+			}
+			m.messages = append(m.messages, lipgloss.JoinHorizontal(lipgloss.Left, m.mozStyle.Render("moz: "), m.whiteStyle.Render(fmt.Sprintf("❌ %s", errorMsg))))
+			m.messages = append(m.messages, lipgloss.JoinHorizontal(lipgloss.Left, m.mozStyle.Render("moz: "), m.whiteStyle.Render("That didn't work. 'sudo auth' again. 🙃")))
+			m.viewport.SetContent(strings.Join(m.messages, "\n"))
+			m.viewport.GotoBottom()
+		}
+
 	case tea.KeyMsg:
+		if m.authenticating {
+			// Ignore input during authentication
+			return m, nil
+		}
+
 		switch msg.Type {
 		case tea.KeyEnter:
 			input := m.textinput.Value()
 			m.messages = append(m.messages, lipgloss.JoinHorizontal(lipgloss.Left, m.senderStyle.Render("you: "), m.whiteStyle.Render(input)))
 
 			if strings.ToLower(strings.TrimSpace(input)) == "sudo auth" {
-				auth.AuthUser()
-				m.messages = append(m.messages, lipgloss.JoinHorizontal(lipgloss.Left, m.mozStyle.Render("moz: "), m.whiteStyle.Render("Authentication successful. Shutting down for restart...")))
+				m.authenticating = true
+				m.messages = append(m.messages, lipgloss.JoinHorizontal(lipgloss.Left, m.mozStyle.Render("moz: "), m.whiteStyle.Render("Launching the web, Don't get lost in the tabs! 🙄")))
 				m.viewport.SetContent(strings.Join(m.messages, "\n"))
 				m.viewport.GotoBottom()
-				return m, tea.Quit
+				m.textinput.Reset()
+				return m, performAuth
 			} else {
 				m.unknownCommandCount++
 				var unknownMsg string
@@ -122,6 +173,11 @@ func (m *AuthModel) View() string {
 
 	chatView := m.viewport.View()
 	inputView := m.textinput.View()
+
+	if m.authenticating {
+		// Disable input during authentication
+		inputView = lipgloss.NewStyle().Foreground(lipgloss.Color("240")).Render("> Authenticating...")
+	}
 
 	chatContainer := chatContainerStyle.Render(
 		lipgloss.JoinVertical(lipgloss.Left, chatView, "\n", inputView),

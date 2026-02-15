@@ -24,13 +24,13 @@ if ! command -v podman >/dev/null 2>&1; then
         fi
 
     else
-        echo "⚠️ /etc/os-release not found. Cannot detect OS."
+     -ldflags="-X main.environment=$APP_ENV"   echo "⚠️ /etc/os-release not found. Cannot detect OS."
     fi
 fi
 """
 
-[tasks."run:presenter"]
+[tasks."run"]
 description = "Run the TUI in presenter mode"
 env = { APP_ENV = "presenter" }
-run = 'go run -ldflags="-X main.environment=$APP_ENV" cmd/shell/main.go'
-alias = "p"
+run = 'go run cmd/shell/main.go'
+alias = "tui"

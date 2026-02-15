@@ -1,23 +1,30 @@
 package ui
 
 import (
+	"github.com/Mozilla-Campus-Club-of-SLIIT/intro-to-desktop-linux/internal/engine/auth"
 	"github.com/charmbracelet/lipgloss"
 )
 
 type LeaderboardModel struct {
-	width       int
-	height      int
-	environment string
+	width  int
+	height int
 }
 
 func (m LeaderboardModel) View() string {
 	listHeight := m.height * 2 / 3
 
+	content := "1. Alice\n2. Bob\n3. Charlie"
+
+	// Example: Show different content for session hosts
+	if auth.IsSessionHost() {
+		content += "\n\n[Session Host Mode] 👑"
+	}
+
 	list := lipgloss.NewStyle().
 		Width(m.width).
 		Height(listHeight).
 		Padding(1, 0).
-		Render("1. Alice\n2. Bob\n3. Charlie" + "lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor incididunt ut labore et dolore magna aliqua. Ut enim ad minim veniam, quis nostrud exercitation ullamco laboris nisi ut aliquip ex ea commodo consequat. Duis aute irure dolor in reprehenderit in voluptate velit esse cillum dolore eu fugiat nulla pariatur. Excepteur sint occaecat cupidatat non proident, sunt in culpa qui officia deserunt mollit anim id est laborum.")
+		Render(content)
 
 	return lipgloss.JoinVertical(lipgloss.Right, list)
 }

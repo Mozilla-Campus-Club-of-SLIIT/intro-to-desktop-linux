@@ -6,9 +6,8 @@ import (
 )
 
 type RootModel struct {
-	width       int
-	height      int
-	environment string
+	width  int
+	height int
 
 	activeModel tea.Model
 }
@@ -37,6 +36,16 @@ func (m *RootModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		case "q", "ctrl+c":
 			return m, tea.Quit
 		}
+
+	case switchToDashboardMsg:
+		m.activeModel = NewDashboardModel()
+
+		// Send window size to new model so it can render properly
+		if m.width > 0 && m.height > 0 {
+			m.activeModel, cmd = m.activeModel.Update(tea.WindowSizeMsg{Width: m.width, Height: m.height})
+		}
+		return m, tea.Batch(cmd, m.activeModel.Init())
+
 	}
 
 	if m.activeModel != nil {
@@ -53,21 +62,16 @@ func (m *RootModel) View() string {
 	return "Initializing..."
 }
 
-func Bootstrap(env string) error {
+func Bootstrap() error {
 	var activeModel tea.Model
 
 	if auth.VerifyAuth() {
-		activeModel = &DashboardModel{
-			environment: env,
-			content:     ContentModel{environment: env},
-			leaderboard: LeaderboardModel{environment: env},
-		}
+		activeModel = NewDashboardModel()
 	} else {
-		activeModel = NewAuthModel(env)
+		activeModel = NewAuthModel()
 	}
 
 	root := &RootModel{
-		environment: env,
 		activeModel: activeModel,
 	}
 

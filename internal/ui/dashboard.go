@@ -6,12 +6,18 @@ import (
 )
 
 type DashboardModel struct {
-	width       int
-	height      int
-	environment string
+	width  int
+	height int
 
 	content     ContentModel
 	leaderboard LeaderboardModel
+}
+
+func NewDashboardModel() *DashboardModel {
+	return &DashboardModel{
+		content:     ContentModel{},
+		leaderboard: LeaderboardModel{},
+	}
 }
 
 func (m *DashboardModel) Init() tea.Cmd {

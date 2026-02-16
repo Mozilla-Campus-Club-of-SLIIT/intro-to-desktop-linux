@@ -48,7 +48,7 @@ func (m *DashboardModel) render() string {
 	width := m.width - 2*margin
 	height := m.height - 2*(margin/4)
 
-	m.leaderboard.width = (width - 2*gap) / 4
+	m.leaderboard.width = (width - 2*gap) / 5
 	m.content.width = (width - 2*gap) - m.leaderboard.width
 
 	m.content.height = height - footerHeight - gap

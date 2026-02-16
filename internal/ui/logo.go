@@ -6,10 +6,12 @@ import (
 	"github.com/charmbracelet/lipgloss"
 )
 
-func LogoLarge() string {
-	mozStyle := lipgloss.NewStyle().Foreground(ColorWarmRed)
-	liveStyle := lipgloss.NewStyle().Foreground(ColorLemonYellow)
+var (
+	mozStyle  = lipgloss.NewStyle().Foreground(ColorWarmRed)
+	liveStyle = lipgloss.NewStyle().Foreground(ColorLemonYellow)
+)
 
+func LogoLarge() string {
 	sliitMozilla := lipgloss.NewStyle().
 		Foreground(ColorLemonYellow).
 		Render("by SLIIT Mozilla")
@@ -46,8 +48,6 @@ func LogoLarge() string {
 }
 
 func LogoMedium() string {
-	mozStyle := lipgloss.NewStyle().Foreground(ColorWarmRed)
-	liveStyle := lipgloss.NewStyle().Foreground(ColorLemonYellow)
 
 	sliitMozilla := lipgloss.NewStyle().
 		Foreground(ColorLemonYellow).

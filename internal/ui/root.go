@@ -1,8 +1,15 @@
 package ui
 
 import (
+	"fmt"
+
 	"github.com/Mozilla-Campus-Club-of-SLIIT/intro-to-desktop-linux/internal/engine/auth"
 	tea "github.com/charmbracelet/bubbletea"
+)
+
+const (
+	minWidth  = 115
+	minHeight = 35
 )
 
 type RootModel struct {
@@ -32,15 +39,13 @@ func (m *RootModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 
 	case tea.KeyMsg:
-		switch msg.String() {
-		case "q", "ctrl+c":
-			return m, tea.Quit
+		if newModel, cmd := keyboardShortcuts(m, msg); cmd != nil {
+			return newModel, cmd
 		}
 
 	case switchToDashboardMsg:
 		m.activeModel = NewDashboardModel()
 
-		// Send window size to new model so it can render properly
 		if m.width > 0 && m.height > 0 {
 			m.activeModel, cmd = m.activeModel.Update(tea.WindowSizeMsg{Width: m.width, Height: m.height})
 		}
@@ -56,10 +61,14 @@ func (m *RootModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 }
 
 func (m *RootModel) View() string {
+	if m.width > 0 && m.height > 0 && (m.width < minWidth || m.height < minHeight) {
+		return fmt.Sprintf("Is this a terminal for ants? 🤏 \nGive me some space or I'm not showing you anything  😤 \nDecrease your font size or stretch the window! \n\n[Width: %d, Height: %d]", m.width, m.height)
+	}
+
 	if m.activeModel != nil {
 		return m.activeModel.View()
 	}
-	return "Initializing..."
+	return "Initializing... (If you see this for more than a few seconds, something went wrong. 🐧)"
 }
 
 func Bootstrap() error {

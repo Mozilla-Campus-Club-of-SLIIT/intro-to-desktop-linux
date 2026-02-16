@@ -9,7 +9,7 @@ import (
 
 func main() {
 	if err := ui.Bootstrap(); err != nil {
-		fmt.Printf("🚨 System malfunction! The penguins are panicked: %v\n", err)
+		fmt.Printf("🚨 System malfunction! The penguins are panicked: \n%v\n", err)
 		os.Exit(1)
 	}
 }

@@ -86,22 +86,34 @@ func GetClient() *AuthClient {
 	return globalClient
 }
 
-// VerifyAuth checks if user is authenticated
+// VerifyAuth checks if user is authenticated and refreshes token if needed
 func VerifyAuth() bool {
 	client := GetClient()
 	client.sessionMu.RLock()
-	defer client.sessionMu.RUnlock()
 
 	if client.session == nil {
+		client.sessionMu.RUnlock()
 		return false
 	}
 
 	// Check if token is expired
-	if time.Now().After(client.session.ExpiresAt) {
-		return false
+	isExpired := time.Now().After(client.session.ExpiresAt)
+	hasRefreshToken := client.session.RefreshToken != ""
+	client.sessionMu.RUnlock()
+
+	// If token is expired but we have a refresh token, try to refresh
+	if isExpired && hasRefreshToken {
+		// Try to refresh the token
+		if err := client.RefreshToken(); err != nil {
+			// Refresh failed, user needs to log in again
+			return false
+		}
+		// Refresh succeeded
+		return true
 	}
 
-	return true
+	// Token is valid
+	return !isExpired
 }
 
 // AuthUser initiates the OAuth flow
@@ -292,6 +304,10 @@ func (c *AuthClient) RefreshToken() error {
 
 	if resp.StatusCode != http.StatusOK {
 		body, _ := io.ReadAll(resp.Body)
+		// If refresh fails, clear the session so user has to log in again
+		if resp.StatusCode == http.StatusUnauthorized {
+			c.Logout()
+		}
 		return fmt.Errorf("token refresh failed (status %d): %s", resp.StatusCode, string(body))
 	}
 
@@ -300,17 +316,48 @@ func (c *AuthClient) RefreshToken() error {
 		return fmt.Errorf("failed to parse token response: %w", err)
 	}
 
+	// Check if a new refresh token was provided in the response cookies
+	var newRefreshToken string
+	for _, cookie := range resp.Cookies() {
+		if cookie.Name == "refreshToken" {
+			newRefreshToken = cookie.Value
+			break
+		}
+	}
+
 	// Update session with new token
 	c.sessionMu.Lock()
 	c.session.AccessToken = tokenResp.Data.Token
-	c.session.ExpiresAt = time.Now().Add(10 * time.Minute)
+	c.session.ExpiresAt = time.Now().Add(15 * time.Minute)
+	// Update refresh token if a new one was provided
+	if newRefreshToken != "" {
+		c.session.RefreshToken = newRefreshToken
+	}
 	c.sessionMu.Unlock()
 
 	return c.saveSession()
 }
 
+// ensureValidToken checks if token is valid and refreshes if needed
+func (c *AuthClient) ensureValidToken() error {
+	c.sessionMu.RLock()
+	isExpired := c.session != nil && time.Now().After(c.session.ExpiresAt)
+	hasRefreshToken := c.session != nil && c.session.RefreshToken != ""
+	c.sessionMu.RUnlock()
+
+	if isExpired && hasRefreshToken {
+		return c.RefreshToken()
+	}
+	return nil
+}
+
 // GetSession fetches the current session from the API
 func (c *AuthClient) GetSession() (*SessionResponse, error) {
+	// Ensure we have a valid token
+	if err := c.ensureValidToken(); err != nil {
+		return nil, fmt.Errorf("failed to ensure valid token: %w", err)
+	}
+
 	c.sessionMu.RLock()
 	if c.session == nil {
 		c.sessionMu.RUnlock()
@@ -375,6 +422,24 @@ func (c *AuthClient) fetchUserInfo(accessToken string) (*UserResponse, error) {
 	}
 
 	return &userResp, nil
+}
+
+// GetCurrentUserInfo fetches current user info with auto token refresh
+func (c *AuthClient) GetCurrentUserInfo() (*UserResponse, error) {
+	// Ensure we have a valid token
+	if err := c.ensureValidToken(); err != nil {
+		return nil, fmt.Errorf("failed to ensure valid token: %w", err)
+	}
+
+	c.sessionMu.RLock()
+	if c.session == nil {
+		c.sessionMu.RUnlock()
+		return nil, fmt.Errorf("not authenticated")
+	}
+	accessToken := c.session.AccessToken
+	c.sessionMu.RUnlock()
+
+	return c.fetchUserInfo(accessToken)
 }
 
 // GetUserInfo returns cached user information with roles

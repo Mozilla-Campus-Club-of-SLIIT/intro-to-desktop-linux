@@ -1,7 +1,8 @@
 package ui
 
 import (
-	"github.com/Mozilla-Campus-Club-of-SLIIT/intro-to-desktop-linux/internal/engine/auth"
+	"strings"
+
 	"github.com/charmbracelet/lipgloss"
 )
 
@@ -11,14 +12,33 @@ type LeaderboardModel struct {
 }
 
 func (m LeaderboardModel) View() string {
-	listHeight := m.height * 2 / 3
+	const diag = "#"
+
+	// Header: "Live Leaderboard" + diagonal slashes
+	headerText := "Live Leaderboard "
+	headerTextWidth := lipgloss.Width(headerText)
+
+	// Account for padding (1 on each side = 2 total)
+	paddingWidth := 2
+
+	// Calculate how many slashes to fill the width
+	remainingWidth := m.width - headerTextWidth - paddingWidth
+	remainingWidth = max(remainingWidth, 0)
+	slashes := strings.Repeat(diag, remainingWidth)
+
+	// Style the header with white text on dark green background
+	headerStyle := lipgloss.NewStyle().
+		Foreground(ColorWhite).
+		Background(ColorDarkGreen).
+		Width(m.width).
+		Padding(0, 1) // vertical padding 0, horizontal padding 1
+
+	header := headerStyle.Render(headerText + slashes)
+
+	// Leaderboard content
+	listHeight := m.height - lipgloss.Height(header) // account for header height
 
 	content := "1. Alice\n2. Bob\n3. Charlie"
-
-	// Example: Show different content for session hosts
-	if auth.IsSessionHost() {
-		content += "\n\n[Session Host Mode] 👑"
-	}
 
 	list := lipgloss.NewStyle().
 		Width(m.width).
@@ -26,5 +46,5 @@ func (m LeaderboardModel) View() string {
 		Padding(1, 0).
 		Render(content)
 
-	return lipgloss.JoinVertical(lipgloss.Right, list)
+	return lipgloss.JoinVertical(lipgloss.Left, header, list)
 }

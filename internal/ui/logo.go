@@ -7,12 +7,12 @@ import (
 )
 
 func LogoLarge() string {
+	mozStyle := lipgloss.NewStyle().Foreground(ColorWarmRed)
+	liveStyle := lipgloss.NewStyle().Foreground(ColorLemonYellow)
+
 	sliitMozilla := lipgloss.NewStyle().
 		Foreground(ColorLemonYellow).
 		Render("by SLIIT Mozilla")
-
-	mozStyle := lipgloss.NewStyle().Foreground(ColorWarmRed)
-	illaStyle := lipgloss.NewStyle().Foreground(ColorLemonYellow)
 
 	moz := []string{
 		mozStyle.Render("████      ███    ████████    █████████████ "),
@@ -25,22 +25,55 @@ func LogoLarge() string {
 		mozStyle.Render("████      ███    ████████    █████████████ "),
 	}
 
-	illa := []string{
-		illaStyle.Render("████          █████████████  ███       ███ █████████████"),
-		illaStyle.Render("████          █████████████  ███       ███ █████████████"),
-		illaStyle.Render("████               ███       ███       ███ ████         "),
-		illaStyle.Render("████               ███       ███       ███ ██████████   "),
-		illaStyle.Render("████               ███       █████   █████ ██████████   "),
-		illaStyle.Render("████               ███         ███   ███   ████         "),
-		illaStyle.Render("█████████████ █████████████    █████████   █████████████"),
-		illaStyle.Render("█████████████ █████████████       ████     █████████████"),
+	live := []string{
+		liveStyle.Render("████          █████████████  ███       ███ █████████████"),
+		liveStyle.Render("████          █████████████  ███       ███ █████████████"),
+		liveStyle.Render("████               ███       ███       ███ ████         "),
+		liveStyle.Render("████               ███       ███       ███ ██████████   "),
+		liveStyle.Render("████               ███       █████   █████ ██████████   "),
+		liveStyle.Render("████               ███         ███   ███   ████         "),
+		liveStyle.Render("█████████████ █████████████    █████████   █████████████"),
+		liveStyle.Render("█████████████ █████████████       ████     █████████████"),
 	}
 
 	var logo strings.Builder
 	for i := range moz {
-		logo.WriteString(lipgloss.JoinHorizontal(lipgloss.Top, moz[i], illa[i]))
+		logo.WriteString(lipgloss.JoinHorizontal(lipgloss.Top, moz[i], live[i]))
 		logo.WriteString("\n")
 	}
 
 	return lipgloss.JoinVertical(lipgloss.Left, logo.String(), sliitMozilla)
+}
+
+func LogoMedium() string {
+	mozStyle := lipgloss.NewStyle().Foreground(ColorWarmRed)
+	liveStyle := lipgloss.NewStyle().Foreground(ColorLemonYellow)
+
+	sliitMozilla := lipgloss.NewStyle().
+		Foreground(ColorLemonYellow).
+		Render("SLIIT Mozilla")
+
+	moz := []string{
+		mozStyle.Render("███   ███  ██████  █████████"),
+		mozStyle.Render("████ ████ ██    ██      ████"),
+		mozStyle.Render("█████████ ██    ██    ███   "),
+		mozStyle.Render("███ █ ███ ██    ██ ████     "),
+		mozStyle.Render("███   ███  ██████  █████████"),
+	}
+
+	live := []string{
+		liveStyle.Render(" ██       █████████ ██   ██ ██████████"),
+		liveStyle.Render(" ██          ███    ██   ██ ███       "),
+		liveStyle.Render(" ██          ███    ██   ██ ████████  "),
+		liveStyle.Render(" ██          ███     ██ ██  ███       "),
+		liveStyle.Render(" ████████ █████████   ███   ██████████"),
+	}
+
+	var logo strings.Builder
+	for i := range moz {
+		logo.WriteString(lipgloss.JoinHorizontal(lipgloss.Top, moz[i], live[i]))
+		logo.WriteString("\n")
+	}
+
+	return lipgloss.JoinVertical(lipgloss.Left, sliitMozilla, logo.String())
 }

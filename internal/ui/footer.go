@@ -13,9 +13,12 @@ type shortcut struct {
 }
 
 var shortcuts = []shortcut{
-	{key: "ctrl+e", label: "[ctrl+e] quit", action: tea.Quit},
+	{key: "tab", label: "[tab] autocomplete", action: nil},
+	{key: "up", label: "[↑/↓] history", action: nil},
+	{key: "down", label: "", action: nil},
 	{key: "enter", label: "[enter] exec", action: nil},
-	{key: "ctrl+p", label: "[ctrl+p] menu", action: nil},
+	{key: "ctrl+shift+l", label: "[ctrl+L] logout", action: nil},
+	{key: "ctrl+e", label: "[ctrl+e] quit", action: tea.Quit},
 }
 
 func keyboardShortcuts(m tea.Model, msg tea.KeyMsg) (tea.Model, tea.Cmd) {

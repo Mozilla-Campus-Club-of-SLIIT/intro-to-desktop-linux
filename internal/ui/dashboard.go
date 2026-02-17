@@ -89,8 +89,6 @@ func (m *DashboardModel) render() string {
 		Height(m.leaderboard.height).
 		Render(m.leaderboard.View())
 
-	// We DON'T set .Height() here because TerminalModel.View()
-	// already manages its own height exactly.
 	content := lipgloss.NewStyle().
 		Width(m.content.width).
 		Render(m.content.View())

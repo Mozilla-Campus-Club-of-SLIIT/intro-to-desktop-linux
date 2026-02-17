@@ -2,8 +2,9 @@ services:
   database:
     image: docker.io/valkey/valkey:latest
     container_name: detachment-db
-    ports:
-      - "6379:6379"
+    volumes:
+      - ./valkey-data:/valkey-data:z
+    command: valkey-server --appendonly yes --appendfsync everysec --save ""
     restart: always
 
   api-server:

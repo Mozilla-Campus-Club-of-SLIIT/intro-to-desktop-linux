@@ -13,3 +13,6 @@ bin/
 
 # log Files
 *.ndjson
+
+# db Files
+deploy/valkey-data

@@ -10,3 +10,6 @@ bin/
 
 # Mise / Tooling
 .miserc.toml
+
+# log Files
+*.ndjson

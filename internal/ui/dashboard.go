@@ -9,28 +9,59 @@ type DashboardModel struct {
 	width  int
 	height int
 
-	content     ContentModel
+	content     *TerminalModel
 	leaderboard LeaderboardModel
 }
 
 func NewDashboardModel() *DashboardModel {
+	term, _ := NewTerminalModel()
 	return &DashboardModel{
-		content:     ContentModel{},
+		content:     term,
 		leaderboard: LeaderboardModel{},
 	}
 }
 
 func (m *DashboardModel) Init() tea.Cmd {
+	if m.content != nil {
+		return m.content.Init()
+	}
 	return nil
 }
 
 func (m *DashboardModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
+	var cmds []tea.Cmd
+
 	switch msg := msg.(type) {
 	case tea.WindowSizeMsg:
 		m.width = msg.Width
 		m.height = msg.Height
 	}
-	return m, nil
+
+	if m.content != nil {
+		const margin = 2
+		const gap = 2
+		layoutWidth := m.width - 2*margin
+		leaderWidth := (layoutWidth - 2*gap) / 5
+		termWidth := (layoutWidth - 2*gap) - leaderWidth
+		termHeight := m.height - (margin / 4) - 1 - gap
+
+		var cmd tea.Cmd
+		var newModel tea.Model
+
+		if _, ok := msg.(tea.WindowSizeMsg); ok {
+			newModel, cmd = m.content.Update(tea.WindowSizeMsg{
+				Width:  termWidth,
+				Height: termHeight,
+			})
+		} else {
+			newModel, cmd = m.content.Update(msg)
+		}
+
+		m.content = newModel.(*TerminalModel)
+		cmds = append(cmds, cmd)
+	}
+
+	return m, tea.Batch(cmds...)
 }
 
 func (m *DashboardModel) View() string {
@@ -50,7 +81,6 @@ func (m *DashboardModel) render() string {
 
 	m.leaderboard.width = (width - 2*gap) / 5
 	m.content.width = (width - 2*gap) - m.leaderboard.width
-
 	m.content.height = height - footerHeight - gap
 	m.leaderboard.height = m.content.height
 
@@ -59,23 +89,17 @@ func (m *DashboardModel) render() string {
 		Height(m.leaderboard.height).
 		Render(m.leaderboard.View())
 
+	// We DON'T set .Height() here because TerminalModel.View()
+	// already manages its own height exactly.
 	content := lipgloss.NewStyle().
 		Width(m.content.width).
-		Height(m.content.height).
 		Render(m.content.View())
 
 	footer := m.footerView(width)
-
 	spacer := lipgloss.NewStyle().Width(gap).Render("")
 	mainArea := lipgloss.JoinHorizontal(lipgloss.Top, content, spacer, leaderboard)
 
 	ui := lipgloss.JoinVertical(lipgloss.Left, mainArea, footer)
 
-	return lipgloss.Place(
-		m.width,
-		m.height,
-		lipgloss.Center,
-		lipgloss.Center,
-		ui,
-	)
+	return lipgloss.Place(m.width, m.height, lipgloss.Center, lipgloss.Center, ui)
 }

@@ -14,10 +14,6 @@ type shortcut struct {
 
 var shortcuts = []shortcut{
 	{key: "ctrl+e", label: "[ctrl+e] quit", action: tea.Quit},
-	{key: "up", label: "[↑/↓] nav", action: nil},
-	{key: "down", label: "", action: nil},
-	{key: "left", label: "[←/→] move", action: nil},
-	{key: "right", label: "", action: nil},
 	{key: "enter", label: "[enter] exec", action: nil},
 	{key: "ctrl+p", label: "[ctrl+p] menu", action: nil},
 }

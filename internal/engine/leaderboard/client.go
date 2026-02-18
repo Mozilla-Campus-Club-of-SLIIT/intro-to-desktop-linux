@@ -10,12 +10,12 @@ import (
 
 	pb "github.com/Mozilla-Campus-Club-of-SLIIT/intro-to-desktop-linux/internal/pb"
 	"google.golang.org/grpc"
-	"google.golang.org/grpc/credentials"
+	"google.golang.org/grpc/credentials/insecure"
 )
 
 const (
 	// grpcServerAddress is the address of the gRPC server.
-	grpcServerAddress = "mozlive-grpc.mrbhanuka.dev:443" // From deploy/compose.yaml
+	grpcServerAddress = "mozlive-grpc.mrbhanuka.dev:50051" // From deploy/compose.yaml
 )
 
 // Entry represents a single record in the leaderboard.
@@ -32,7 +32,7 @@ type LeaderboardClient struct {
 
 // NewLeaderboardClient creates a new LeaderboardClient and establishes a gRPC connection.
 func NewLeaderboardClient(ctx context.Context) (*LeaderboardClient, error) {
-	conn, err := grpc.DialContext(ctx, grpcServerAddress, grpc.WithTransportCredentials(credentials.NewClientTLSFromCert(nil, "")))
+	conn, err := grpc.DialContext(ctx, grpcServerAddress, grpc.WithTransportCredentials(insecure.NewCredentials()))
 	if err != nil {
 		return nil, fmt.Errorf("failed to connect to gRPC server: %w", err)
 	}

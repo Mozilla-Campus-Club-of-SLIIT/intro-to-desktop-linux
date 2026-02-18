@@ -45,7 +45,11 @@ func NewLeaderboardModel(width, height int) LeaderboardModel {
 }
 
 // Init initializes the model and starts the leaderboard stream.
-func (m LeaderboardModel) Init() tea.Cmd {
+func (m *LeaderboardModel) Init() tea.Cmd { // Changed to pointer receiver
+	// Initialize context for the gRPC stream FIRST
+	m.ctx, m.cancel = context.WithCancel(context.Background())
+	log.Printf("LeaderboardModel.Init: Context initialized (m.ctx: %p)", m.ctx)
+
 	authClient := auth.GetClient()
 
 	// Get currentUser (username) for display
@@ -53,42 +57,48 @@ func (m LeaderboardModel) Init() tea.Cmd {
 	m.currentUser, _, _, err = authClient.GetUserInfo()
 	if err != nil {
 		m.leaderboardErr = fmt.Errorf("failed to get user info: %w", err)
+		log.Printf("LeaderboardModel.Init: Failed to get user info: %v", err)
 		return nil
 	}
 
 	m.userID, err = authClient.GetUserID()
 	if err != nil {
 		m.leaderboardErr = fmt.Errorf("failed to get user ID: %w", err)
+		log.Printf("LeaderboardModel.Init: Failed to get user ID: %v", err)
 		return nil
 	}
 
 	m.accessToken, err = authClient.GetAccessToken()
 	if err != nil {
 		m.leaderboardErr = fmt.Errorf("failed to get access token: %w", err)
+		log.Printf("LeaderboardModel.Init: Failed to get access token: %v", err)
 		return nil
 	}
+	log.Printf("LeaderboardModel.Init: User %s (ID: %s) authenticated.", m.currentUser, m.userID)
 
-	// Initialize context for the gRPC stream
-	m.ctx, m.cancel = context.WithCancel(context.Background())
 
 	m.leaderboardClient, err = leaderboard.NewLeaderboardClient(m.ctx)
 	if err != nil {
 		m.leaderboardErr = fmt.Errorf("failed to create leaderboard client: %w", err)
+		log.Printf("LeaderboardModel.Init: Failed to create leaderboard client: %v", err)
 		return nil // No command, as client failed
 	}
+	log.Printf("LeaderboardModel.Init: Leaderboard client created with context %p.", m.ctx)
 
 	return m.listenForLeaderboardUpdates()
 }
 
 // listenForLeaderboardUpdates starts a goroutine to listen for leaderboard updates
 // and sends them as tea.Msg to the main Update loop.
-func (m LeaderboardModel) listenForLeaderboardUpdates() tea.Cmd {
+func (m *LeaderboardModel) listenForLeaderboardUpdates() tea.Cmd { // Changed to pointer receiver
+	log.Printf("listenForLeaderboardUpdates: Starting stream for user %s (ID: %s) with context %p", m.currentUser, m.userID, m.ctx)
 	updates, errs := m.leaderboardClient.GetLeaderboardStream(m.ctx, m.userID, m.accessToken)
 
 	return func() tea.Msg {
 		for {
 			select {
 			case <-m.ctx.Done():
+				log.Printf("listenForLeaderboardUpdates goroutine: Context cancelled. Error: %v", m.ctx.Err())
 				// Context cancelled, clean up client connection
 				if m.leaderboardClient != nil {
 					m.leaderboardClient.Close()
@@ -96,23 +106,24 @@ func (m LeaderboardModel) listenForLeaderboardUpdates() tea.Cmd {
 				return nil // Stop sending messages
 			case update, ok := <-updates:
 				if !ok {
-					log.Println("Leaderboard update channel closed.")
+					log.Println("listenForLeaderboardUpdates goroutine: Leaderboard update channel closed.")
 					if m.leaderboardClient != nil {
 						m.leaderboardClient.Close()
 					}
 					return MsgLeaderboardError(fmt.Errorf("leaderboard stream closed unexpectedly"))
 				}
+				log.Printf("listenForLeaderboardUpdates goroutine: Received %d leaderboard updates.", len(update))
 				return MsgLeaderboardUpdate(update)
 			case err, ok := <-errs:
 				if !ok {
-					log.Println("Leaderboard error channel closed.")
+					log.Println("listenForLeaderboardUpdates goroutine: Leaderboard error channel closed.")
 					if m.leaderboardClient != nil {
 						m.leaderboardClient.Close()
 					}
 					return MsgLeaderboardError(fmt.Errorf("leaderboard error stream closed unexpectedly"))
 				}
 				if err != nil {
-					log.Printf("Error in leaderboard stream: %v", err)
+					log.Printf("listenForLeaderboardUpdates goroutine: Received error from stream: %v", err)
 					// Don't close client here, stream might recover or next update will fail
 					return MsgLeaderboardError(err)
 				}
@@ -122,7 +133,7 @@ func (m LeaderboardModel) listenForLeaderboardUpdates() tea.Cmd {
 }
 
 // Update handles messages.
-func (m LeaderboardModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
+func (m *LeaderboardModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) { // Changed to pointer receiver
 	switch msg := msg.(type) {
 	case tea.KeyMsg:
 		switch msg.String() {
@@ -134,8 +145,8 @@ func (m LeaderboardModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 	case MsgLeaderboardUpdate:
 		m.currentLeaderboard = msg
-		m.leaderboardErr = nil                    // Clear any previous errors
-		return m, m.listenForLeaderboardUpdates() // Keep listening for more updates
+		m.leaderboardErr = nil // Clear any previous errors
+		return m, nil          // Do NOT return m.listenForLeaderboardUpdates() again
 	case MsgLeaderboardError:
 		m.leaderboardErr = msg
 		// Maybe retry or just display error. For now, just display.

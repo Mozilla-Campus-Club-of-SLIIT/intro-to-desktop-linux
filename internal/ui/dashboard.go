@@ -10,54 +10,72 @@ type DashboardModel struct {
 	height int
 
 	content     *TerminalModel
-	leaderboard LeaderboardModel
+	leaderboard *LeaderboardModel // Changed to pointer
 }
 
 func NewDashboardModel() *DashboardModel {
 	term, _ := NewTerminalModel()
+	leaderboardModel := NewLeaderboardModel(0, 0) // Initialize with zero dimensions, will be updated by WindowSizeMsg
 	return &DashboardModel{
 		content:     term,
-		leaderboard: LeaderboardModel{},
+		leaderboard: &leaderboardModel, // Return a pointer to the initialized LeaderboardModel
 	}
 }
 
 func (m *DashboardModel) Init() tea.Cmd {
+	var cmds []tea.Cmd
 	if m.content != nil {
-		return m.content.Init()
+		cmds = append(cmds, m.content.Init())
 	}
-	return nil
+	// Call Init() for the leaderboard model as well!
+	if m.leaderboard != nil {
+		cmds = append(cmds, m.leaderboard.Init())
+	}
+	return tea.Batch(cmds...)
 }
 
 func (m *DashboardModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	var cmds []tea.Cmd
+	var newModel tea.Model
+	var cmd tea.Cmd
 
-	switch msg := msg.(type) {
-	case tea.WindowSizeMsg:
+	// Update DashboardModel's dimensions
+	if msg, ok := msg.(tea.WindowSizeMsg); ok {
 		m.width = msg.Width
 		m.height = msg.Height
 	}
 
+	// Calculate dimensions for sub-models based on current DashboardModel dimensions
+	const footerHeight = 1
+	const margin = 2
+	const gap = 2
+
+	width := m.width - 2*margin
+	height := m.height - 2*(margin/4)
+
+	effectiveLayoutWidth := width - gap
+	leaderWidth := effectiveLayoutWidth / 5
+	termWidth := effectiveLayoutWidth - leaderWidth
+	termHeight := height - footerHeight - gap
+
+	// Update TerminalModel
 	if m.content != nil {
-		const margin = 2
-		const gap = 2
-		layoutWidth := m.width - 2*margin
-		leaderWidth := (layoutWidth - 2*gap) / 5
-		termWidth := (layoutWidth - 2*gap) - leaderWidth
-		termHeight := m.height - (margin / 4) - 1 - gap
-
-		var cmd tea.Cmd
-		var newModel tea.Model
-
-		if _, ok := msg.(tea.WindowSizeMsg); ok {
-			newModel, cmd = m.content.Update(tea.WindowSizeMsg{
-				Width:  termWidth,
-				Height: termHeight,
-			})
-		} else {
-			newModel, cmd = m.content.Update(msg)
-		}
-
+		// Pass a WindowSizeMsg to TerminalModel if the main WindowSizeMsg was received,
+		// or if the sub-model simply needs to update its state with the current calculated dimensions.
+		// For robustness, always set the dimensions before calling Update, and also pass msg.
+		m.content.width = termWidth
+		m.content.height = termHeight
+		newModel, cmd = m.content.Update(msg)
 		m.content = newModel.(*TerminalModel)
+		cmds = append(cmds, cmd)
+	}
+
+	// Update LeaderboardModel
+	if m.leaderboard != nil {
+		m.leaderboard.width = leaderWidth
+		m.leaderboard.height = termHeight
+		newModel, cmd = m.leaderboard.Update(msg)
+		m.leaderboard = newModel.(*LeaderboardModel)
 		cmds = append(cmds, cmd)
 	}
 
@@ -79,23 +97,38 @@ func (m *DashboardModel) render() string {
 	width := m.width - 2*margin
 	height := m.height - 2*(margin/4)
 
-	m.leaderboard.width = (width - 2*gap) / 5
-	m.content.width = (width - 2*gap) - m.leaderboard.width
-	m.content.height = height - footerHeight - gap
-	m.leaderboard.height = m.content.height
+	// Calculate dimensions for leaderboard and content
+	effectiveLayoutWidth := width - gap
+	leaderWidth := effectiveLayoutWidth / 5
+	termWidth := effectiveLayoutWidth - leaderWidth
+	termHeight := height - footerHeight - gap
 
-	leaderboard := lipgloss.NewStyle().
-		Width(m.leaderboard.width).
-		Height(m.leaderboard.height).
-		Render(m.leaderboard.View())
+	// Ensure dimensions are propagated correctly to sub-models for rendering,
+	// by setting their internal width/height before calling View().
+	// This makes View() itself stateless regarding dimensions, relying on the model's fields.
+	if m.leaderboard != nil {
+		m.leaderboard.width = leaderWidth
+		m.leaderboard.height = termHeight
+	}
+	if m.content != nil {
+		m.content.width = termWidth
+		m.content.height = termHeight
+	}
 
-	content := lipgloss.NewStyle().
-		Width(m.content.width).
+
+	leaderboardView := lipgloss.NewStyle().
+		Width(leaderWidth).
+		Height(termHeight).
+		Render(m.leaderboard.View()) // Correctly call View on pointer
+
+	contentView := lipgloss.NewStyle().
+		Width(termWidth).
+		Height(termHeight). // Also give content height
 		Render(m.content.View())
 
 	footer := m.footerView(width)
 	spacer := lipgloss.NewStyle().Width(gap).Render("")
-	mainArea := lipgloss.JoinHorizontal(lipgloss.Top, content, spacer, leaderboard)
+	mainArea := lipgloss.JoinHorizontal(lipgloss.Top, contentView, spacer, leaderboardView)
 
 	ui := lipgloss.JoinVertical(lipgloss.Left, mainArea, footer)
 

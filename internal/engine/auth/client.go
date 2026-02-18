@@ -338,8 +338,8 @@ func (c *AuthClient) RefreshToken() error {
 	return c.saveSession()
 }
 
-// ensureValidToken checks if token is valid and refreshes if needed
-func (c *AuthClient) ensureValidToken() error {
+// EnsureValidToken checks if token is valid and refreshes if needed
+func (c *AuthClient) EnsureValidToken() error {
 	c.sessionMu.RLock()
 	isExpired := c.session != nil && time.Now().After(c.session.ExpiresAt)
 	hasRefreshToken := c.session != nil && c.session.RefreshToken != ""
@@ -354,7 +354,7 @@ func (c *AuthClient) ensureValidToken() error {
 // GetSession fetches the current session from the API
 func (c *AuthClient) GetSession() (*SessionResponse, error) {
 	// Ensure we have a valid token
-	if err := c.ensureValidToken(); err != nil {
+	if err := c.EnsureValidToken(); err != nil {
 		return nil, fmt.Errorf("failed to ensure valid token: %w", err)
 	}
 
@@ -427,7 +427,7 @@ func (c *AuthClient) fetchUserInfo(accessToken string) (*UserResponse, error) {
 // GetCurrentUserInfo fetches current user info with auto token refresh
 func (c *AuthClient) GetCurrentUserInfo() (*UserResponse, error) {
 	// Ensure we have a valid token
-	if err := c.ensureValidToken(); err != nil {
+	if err := c.EnsureValidToken(); err != nil {
 		return nil, fmt.Errorf("failed to ensure valid token: %w", err)
 	}
 

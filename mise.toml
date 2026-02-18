@@ -63,18 +63,19 @@ bash -c "mkdir -p internal/pb && protoc --proto_path=. --go_out=. --go_opt=modul
 [tasks."seed-leaderboard"]
 description = "Adds 10 dummy records to the leaderboard using podman exec valkey-cli."
 run = """
+bash -c "
 # Check if podman is running and detachment-db container exists
-if ! podman ps --filter "name=detachment-db" --format "{{.ID}}" | grep -q .; then
-    echo "❌ Error: detachment-db container not found or not running. Please start your compose stack."
+if ! podman ps --filter \\"name=detachment-db\\" --format \\"{{.ID}}\\" | grep -q .; then
+    echo \\"❌ Error: detachment-db container not found or not running. Please start your compose stack.\\"
     exit 1
 fi
 
 # Add 10 dummy records with increasing scores
-for i in $(seq 1 10); do
-    username="DummyUser$i"
-    score=$(($RANDOM % 1000 + 100 * $i)) # Generate score
-    echo "Adding $username with score $score to leaderboard..."
-    podman exec detachment-db valkey-cli ZADD leaderboard $score "$username"
+for i in \$(seq 1 10); do
+    username=\\"DummyUser\$i\\"
+    score=\$((\$RANDOM % 1000 + 100 * \$i)) # Generate score
+    echo \\"Adding \$username with score \$score to leaderboard...\\"
+    podman exec detachment-db valkey-cli ZADD leaderboard \$score \\"\$username\\"
 done
-echo "Leaderboard seeding complete."
-"""
+echo \\"Leaderboard seeding complete.\\"
+"

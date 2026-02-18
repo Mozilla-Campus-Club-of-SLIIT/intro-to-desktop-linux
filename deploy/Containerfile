@@ -6,7 +6,8 @@ RUN go mod download
 
 # Install protobuf tools
 RUN apk add --no-cache protobuf # Installs protoc
-ENV PATH="/go/bin:${PATH}"      # Add go/bin to PATH for protoc-gen-go and protoc-gen-go-grpc
+# Add go/bin to PATH for protoc-gen-go and protoc-gen-go-grpc
+ENV PATH="/go/bin:${PATH}"
 RUN go install google.golang.org/protobuf/cmd/protoc-gen-go@latest
 RUN go install google.golang.org/grpc/cmd/protoc-gen-go-grpc@latest
 

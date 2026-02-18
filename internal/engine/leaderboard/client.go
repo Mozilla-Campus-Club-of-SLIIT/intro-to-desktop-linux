@@ -4,10 +4,11 @@ import (
 	"context"
 	"fmt"
 	"io"
-	"log"
 	"sort"
+	"sync"
 	"time"
 
+	"github.com/Mozilla-Campus-Club-of-SLIIT/intro-to-desktop-linux/internal/engine/auth"
 	pb "github.com/Mozilla-Campus-Club-of-SLIIT/intro-to-desktop-linux/internal/pb"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
@@ -17,24 +18,42 @@ import (
 
 const (
 	// grpcServerAddress is the address of the gRPC server.
-	grpcServerAddress = "mozlive-grpc.mrbhanuka.dev:50051" // From deploy/compose.yaml
+	grpcServerAddress = "mozlive-grpc.mrbhanuka.dev:50051"
 )
 
 // Entry represents a single record in the leaderboard.
 type Entry struct {
 	Username string
-	Score    float64 // Changed to float64 to match protobuf definition
+	Score    float64
 }
 
-// LeaderboardClient provides methods to interact with the leaderboard gRPC service.
+var (
+	globalClient *LeaderboardClient
+	clientOnce   sync.Once
+)
+
+// GetClient returns the singleton leaderboard client.
+func GetClient(ctx context.Context) (*LeaderboardClient, error) {
+	var err error
+	clientOnce.Do(func() {
+		globalClient, err = NewLeaderboardClient(ctx)
+	})
+	return globalClient, err
+}
+
+// LeaderboardClient provides methods to interact with the leaderboard gRPC service and maintains state.
 type LeaderboardClient struct {
 	client pb.DetachmentServiceClient
 	conn   *grpc.ClientConn
+
+	mu                 sync.RWMutex
+	currentLeaderboard []Entry
+	leaderboardErr     error
 }
 
 // NewLeaderboardClient creates a new LeaderboardClient and establishes a gRPC connection.
 func NewLeaderboardClient(ctx context.Context) (*LeaderboardClient, error) {
-	conn, err := grpc.DialContext(ctx, grpcServerAddress, grpc.WithTransportCredentials(insecure.NewCredentials()))
+	conn, err := grpc.NewClient(grpcServerAddress, grpc.WithTransportCredentials(insecure.NewCredentials()))
 	if err != nil {
 		return nil, fmt.Errorf("failed to connect to gRPC server: %w", err)
 	}
@@ -53,72 +72,155 @@ func (lc *LeaderboardClient) Close() error {
 	return nil
 }
 
-// GetLeaderboardStream establishes a streaming connection to the leaderboard service.
-// It returns a channel for leaderboard updates and an error channel.
-func (lc *LeaderboardClient) GetLeaderboardStream(ctx context.Context, userID, accessToken string) (<-chan []Entry, <-chan error) {
+// GetEntries returns a copy of the current leaderboard entries.
+func (lc *LeaderboardClient) GetEntries() []Entry {
+	lc.mu.RLock()
+	defer lc.mu.RUnlock()
+
+	// Return a copy to avoid data race and external modification
+	entries := make([]Entry, len(lc.currentLeaderboard))
+	copy(entries, lc.currentLeaderboard)
+	return entries
+}
+
+// GetError returns the last error encountered during streaming.
+func (lc *LeaderboardClient) GetError() error {
+	lc.mu.RLock()
+	defer lc.mu.RUnlock()
+	return lc.leaderboardErr
+}
+
+// Start establishes a streaming connection to the leaderboard service and maintains the internal state.
+// It returns channels for updates and errors.
+func (lc *LeaderboardClient) Start(ctx context.Context) (<-chan []Entry, <-chan error) {
 	updateCh := make(chan []Entry)
-	errCh := make(chan error, 1) // Buffered to prevent goroutine leak if error happens before reader is ready
+	errCh := make(chan error, 1)
 
 	go func() {
 		defer close(updateCh)
 		defer close(errCh)
 
-		req := &pb.GetLeaderboardRequest{
-			UserId:      userID,
-			AccessToken: accessToken,
-		}
-
-		stream, err := lc.client.GetLeaderboard(ctx, req)
-		if err != nil {
-			errCh <- fmt.Errorf("failed to open leaderboard stream: %w", err)
-			return
-		}
+		authClient := auth.GetClient()
 
 		for {
-			resp, err := stream.Recv() // This blocks until a message is received or error occurs.
-			if err == io.EOF {
-				log.Println("Leaderboard stream closed by server (EOF).")
-				return // Stream ended gracefully
-			}
-			if err != nil {
-				// Check if the error is due to context cancellation specifically from the gRPC stream.
-				if status.Code(err) == codes.Canceled {
-					log.Println("Leaderboard stream cancelled, likely by client context.")
-					// No need to send to errCh, as ctx.Err() will handle the client-side cleanup.
-					return
-				}
-				errCh <- fmt.Errorf("failed to receive leaderboard update: %w", err)
-				return
-			}
-
-			var currentLeaderboard []Entry
-			for _, record := range resp.Records {
-				currentLeaderboard = append(currentLeaderboard, Entry{
-					Username: record.Username,
-					Score:    record.Score,
-				})
-			}
-
-			// Re-sort the leaderboard just in case, or for client-specific ordering needs
-			sort.Slice(currentLeaderboard, func(i, j int) bool {
-				return currentLeaderboard[i].Score > currentLeaderboard[j].Score
-			})
-
-			// Attempt to send the update to the update channel.
-			// Use a select to ensure non-blocking send and respect context cancellation.
 			select {
-			case updateCh <- currentLeaderboard:
-				// Successfully sent update
-			case <-ctx.Done(): // If client context is done while trying to send
-				log.Println("Leaderboard stream goroutine: Context cancelled while sending update.")
-				errCh <- ctx.Err() // Propagate this specific cancellation
+			case <-ctx.Done():
 				return
-			case <-time.After(5 * time.Second): // Timeout for sending update if client is too slow
-				log.Println("Timeout sending leaderboard update, client not consuming fast enough. Dropping update.")
-				// Depending on requirements, could return error or drop update. For now, drop.
+			default:
+			}
+
+			userID, err := authClient.GetUserID()
+			if err != nil {
+				lc.handleError(ctx, errCh, fmt.Errorf("failed to get user ID: %w", err))
+				select {
+				case <-ctx.Done():
+					return
+				case <-time.After(2 * time.Second):
+					continue
+				}
+			}
+
+			accessToken, err := authClient.GetAccessToken()
+			if err != nil {
+				lc.handleError(ctx, errCh, fmt.Errorf("failed to get access token: %w", err))
+				select {
+				case <-ctx.Done():
+					return
+				case <-time.After(2 * time.Second):
+					continue
+				}
+			}
+
+			req := &pb.GetLeaderboardRequest{
+				UserId:      userID,
+				AccessToken: accessToken,
+			}
+
+			stream, err := lc.client.GetLeaderboard(ctx, req)
+			if err != nil {
+				lc.handleError(ctx, errCh, fmt.Errorf("failed to open leaderboard stream: %w", err))
+				select {
+				case <-ctx.Done():
+					return
+				case <-time.After(5 * time.Second):
+					continue
+				}
+			}
+
+			lc.updateState(nil, nil) // Clear error on successful connection
+
+		recvLoop:
+			for {
+				resp, err := stream.Recv()
+				if err == io.EOF {
+					break recvLoop
+				}
+				if err != nil {
+					if status.Code(err) == codes.Canceled {
+						return
+					}
+					lc.handleError(ctx, errCh, fmt.Errorf("failed to receive leaderboard update: %w", err))
+					break recvLoop
+				}
+
+				var entries []Entry
+				for _, record := range resp.Records {
+					entries = append(entries, Entry{
+						Username: record.Username,
+						Score:    record.Score,
+					})
+				}
+
+				lc.sortEntries(entries)
+				lc.updateState(entries, nil)
+
+				select {
+				case updateCh <- entries:
+				case <-ctx.Done():
+					return
+				default:
+				}
+			}
+
+			select {
+			case <-ctx.Done():
+				return
+			case <-time.After(2 * time.Second):
 			}
 		}
 	}()
 
 	return updateCh, errCh
+}
+
+// handleError updates internal state and sends error to channel if possible.
+func (lc *LeaderboardClient) handleError(ctx context.Context, errCh chan<- error, err error) {
+	lc.updateState(nil, err)
+	select {
+	case errCh <- err:
+	case <-ctx.Done():
+	default:
+	}
+}
+
+// updateState safely updates the internal leaderboard state.
+func (lc *LeaderboardClient) updateState(entries []Entry, err error) {
+	lc.mu.Lock()
+	defer lc.mu.Unlock()
+	if entries != nil {
+		lc.currentLeaderboard = entries
+	}
+	lc.leaderboardErr = err
+}
+
+// sortEntries handles the sorting logic for the leaderboard.
+func (lc *LeaderboardClient) sortEntries(entries []Entry) {
+	sort.Slice(entries, func(i, j int) bool {
+		// Sort by score descending
+		if entries[i].Score != entries[j].Score {
+			return entries[i].Score > entries[j].Score
+		}
+		// Then by username ascending for deterministic ordering
+		return entries[i].Username < entries[j].Username
+	})
 }

@@ -4,7 +4,6 @@ import (
 	"context"
 	"fmt"
 	"strings"
-	"time"
 
 	"github.com/Mozilla-Campus-Club-of-SLIIT/intro-to-desktop-linux/internal/engine/auth"
 	"github.com/Mozilla-Campus-Club-of-SLIIT/intro-to-desktop-linux/internal/engine/leaderboard"
@@ -24,12 +23,12 @@ func waitForUpdateCmd(updates <-chan []leaderboard.Entry, errs <-chan error) tea
 		select {
 		case update, ok := <-updates:
 			if !ok {
-				return MsgLeaderboardError(fmt.Errorf("leaderboard update stream closed"))
+				return nil
 			}
 			return MsgLeaderboardUpdate(update)
 		case err, ok := <-errs:
 			if !ok {
-				return MsgLeaderboardError(fmt.Errorf("leaderboard error stream closed"))
+				return nil
 			}
 			return MsgLeaderboardError(err)
 		}
@@ -50,8 +49,6 @@ type LeaderboardModel struct {
 	ctx    context.Context
 	cancel context.CancelFunc // For cancelling the gRPC stream
 
-	userID      string
-	accessToken string
 	currentUser string // For display in header
 }
 
@@ -64,17 +61,6 @@ func NewLeaderboardModel(width, height int) *LeaderboardModel {
 	}
 }
 
-// sendNotificationCmd creates a tea.Cmd to send a notification message.
-func sendNotificationCmd(message string, isError bool) tea.Cmd {
-	return func() tea.Msg {
-		return MsgNotification{
-			Timestamp: time.Now(),
-			Message:   message,
-			IsError:   isError,
-		}
-	}
-}
-
 // Init initializes the model and starts the leaderboard stream.
 func (m *LeaderboardModel) Init() tea.Cmd {
 	m.ctx, m.cancel = context.WithCancel(context.Background())
@@ -83,32 +69,21 @@ func (m *LeaderboardModel) Init() tea.Cmd {
 	var err error
 	m.currentUser, _, _, err = authClient.GetUserInfo()
 	if err != nil {
-		return sendNotificationCmd(fmt.Sprintf("Failed to get user info: %v", err), true)
+		m.leaderboardErr = err
+		return nil
 	}
 
-	m.userID, err = authClient.GetUserID()
+	m.leaderboardClient, err = leaderboard.GetClient(m.ctx)
 	if err != nil {
-		return sendNotificationCmd(fmt.Sprintf("Failed to get user ID: %v", err), true)
-	}
-
-	m.accessToken, err = authClient.GetAccessToken()
-	if err != nil {
-		return sendNotificationCmd(fmt.Sprintf("Failed to get access token: %v", err), true)
-	}
-
-	m.leaderboardClient, err = leaderboard.NewLeaderboardClient(m.ctx)
-	if err != nil {
-		return sendNotificationCmd(fmt.Sprintf("Failed to create leaderboard client: %v", err), true)
+		m.leaderboardErr = err
+		return nil
 	}
 
 	// Start the stream and get the channels
-	m.updates, m.errs = m.leaderboardClient.GetLeaderboardStream(m.ctx, m.userID, m.accessToken)
+	m.updates, m.errs = m.leaderboardClient.Start(m.ctx)
 
 	// Return the first waitForUpdateCmd to start listening
-	return tea.Batch(
-		sendNotificationCmd(fmt.Sprintf("User %s authenticated, starting stream.", m.currentUser), false),
-		waitForUpdateCmd(m.updates, m.errs),
-	)
+	return waitForUpdateCmd(m.updates, m.errs)
 }
 
 // Update handles messages.
@@ -120,14 +95,6 @@ func (m *LeaderboardModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	}
 
 	switch msg := msg.(type) {
-	case tea.KeyMsg:
-		switch msg.String() {
-		case "q", "ctrl+c":
-			if m.cancel != nil {
-				m.cancel() // Cancel context to stop gRPC stream
-			}
-			return m, tea.Quit
-		}
 	case MsgLeaderboardUpdate:
 		m.currentLeaderboard = msg
 		m.leaderboardErr = nil // Clear any previous errors
@@ -135,9 +102,8 @@ func (m *LeaderboardModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, waitForUpdateCmd(m.updates, m.errs)
 	case MsgLeaderboardError:
 		m.leaderboardErr = msg
-		// Optionally, you might want to stop listening on error, or try to reconnect.
-		// For now, we'll stop listening.
-		return m, nil
+		// Continue listening for the next update or error (client handles reconnection)
+		return m, waitForUpdateCmd(m.updates, m.errs)
 	}
 	return m, nil
 }
@@ -164,10 +130,9 @@ func (m *LeaderboardModel) View() string {
 	// Display error if present
 	if m.leaderboardErr != nil {
 		errorStyle := lipgloss.NewStyle().
-			Foreground(lipgloss.Color("#FF0000")).
-			Padding(1, 2).
-			Border(lipgloss.RoundedBorder()).
-			Width(m.width - 4)
+			Foreground(ColorWarmRed).
+			Padding(1, 1).
+			Width(m.width)
 		return lipgloss.JoinVertical(lipgloss.Left, header, errorStyle.Render(fmt.Sprintf("Error: %v", m.leaderboardErr)))
 	}
 
@@ -187,7 +152,7 @@ func (m *LeaderboardModel) View() string {
 		case 2:
 			rankStr = "🥉"
 		default:
-			rankStr = fmt.Sprintf("%d.", rank+1)
+			rankStr = fmt.Sprintf("#%d", rank+1)
 		}
 
 		scoreStr := fmt.Sprintf("%04.0f", entry.Score)                        // Format float64 score
@@ -224,7 +189,7 @@ func (m *LeaderboardModel) View() string {
 		var loadingRows []string
 		contentHeight := m.height - 3
 		if contentHeight > 0 {
-			for i := 0; i < contentHeight; i++ {
+			for range contentHeight {
 				loadingRows = append(loadingRows, formatLoadingRow())
 			}
 		}

@@ -9,19 +9,16 @@ type DashboardModel struct {
 	width  int
 	height int
 
-	content      *TerminalModel
-	leaderboard  *LeaderboardModel
-	notification *NotificationModel // New: NotificationModel
+	content     *TerminalModel
+	leaderboard *LeaderboardModel
 }
 
 func NewDashboardModel() *DashboardModel {
 	term, _ := NewTerminalModel()
 	leaderboardModel := NewLeaderboardModel(0, 0)
-	notificationModel := NewNotificationModel() // New: Initialize NotificationModel
 	return &DashboardModel{
-		content:      term,
-		leaderboard:  leaderboardModel,
-		notification: notificationModel, // New: Add to struct
+		content:     term,
+		leaderboard: leaderboardModel,
 	}
 }
 
@@ -32,9 +29,6 @@ func (m *DashboardModel) Init() tea.Cmd {
 	}
 	if m.leaderboard != nil {
 		cmds = append(cmds, m.leaderboard.Init())
-	}
-	if m.notification != nil { // New: Call Init() for notification model
-		cmds = append(cmds, m.notification.Init())
 	}
 	return tea.Batch(cmds...)
 }
@@ -54,9 +48,6 @@ func (m *DashboardModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	const footerHeight = 1
 	const margin = 2
 	const gap = 2
-	const notificationHeight = 5 // User requested 5 lines for notifications
-	const notificationHeader = 1 // 1 line for notification header
-	const notificationSpace = 2  // 2 lines for space below leaderboard
 
 	effectiveWidth := m.width - 2*margin
 	effectiveHeight := m.height - 2*(margin/4)
@@ -65,8 +56,8 @@ func (m *DashboardModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	leaderWidth := effectiveLayoutWidth / 5
 	termWidth := effectiveLayoutWidth - leaderWidth
 
-	// Calculate heights considering the new notification area
-	leaderboardAndTerminalHeight := effectiveHeight - footerHeight - gap - notificationHeader - notificationHeight - notificationSpace
+	// Calculate heights
+	leaderboardAndTerminalHeight := effectiveHeight - footerHeight - gap
 	termHeight := leaderboardAndTerminalHeight
 	leaderHeight := leaderboardAndTerminalHeight
 
@@ -90,16 +81,6 @@ func (m *DashboardModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		cmds = append(cmds, cmd)
 	}
 
-	// Update NotificationModel
-	if m.notification != nil { // New: Update notification model
-		m.notification.width = leaderWidth // Notifications align with leaderboard width
-		// The height for notifications is fixed as per requirement
-		m.notification.height = notificationHeight + notificationHeader + notificationSpace
-		newModel, cmd = m.notification.Update(msg)
-		m.notification = newModel.(*NotificationModel)
-		cmds = append(cmds, cmd)
-	}
-
 	return m, tea.Batch(cmds...)
 }
 
@@ -114,9 +95,6 @@ func (m *DashboardModel) render() string {
 	const footerHeight = 1
 	const margin = 2
 	const gap = 2
-	const notificationHeight = 5 // User requested 5 lines for notifications content
-	const notificationHeader = 1 // 1 line for notification header
-	const notificationSpace = 2  // 2 lines for space between leaderboard and notifications
 
 	width := m.width - 2*margin
 	height := m.height - 2*(margin/4)
@@ -126,19 +104,10 @@ func (m *DashboardModel) render() string {
 	leaderWidth := effectiveLayoutWidth / 5
 	termWidth := effectiveLayoutWidth - leaderWidth
 
-	// Heights calculation needs to account for notifications
-	// Total height available for dynamic content = height - footerHeight - gap (above footer)
-	// Remaining height after terminal and leaderboard = total dynamic height - (notificationHeader + notificationHeight + notificationSpace)
-	leaderboardAndTerminalHeight := height - footerHeight - gap - notificationHeader - notificationHeight - notificationSpace
+	// Heights calculation
+	leaderboardAndTerminalHeight := height - footerHeight - gap
 	termHeight := leaderboardAndTerminalHeight
 	leaderHeight := leaderboardAndTerminalHeight
-
-	// Dimensions are now set in Update() method, so we only use them for rendering here
-	// Ensure notification dimensions are set (notification model doesn't receive WindowSizeMsg in Update)
-	if m.notification != nil {
-		m.notification.width = leaderWidth
-		m.notification.height = notificationHeight + notificationHeader
-	}
 
 	leaderboardView := lipgloss.NewStyle().
 		Width(leaderWidth).
@@ -150,23 +119,10 @@ func (m *DashboardModel) render() string {
 		Height(termHeight).
 		Render(m.content.View())
 
-	// New: Render notification view
-	notificationView := lipgloss.NewStyle().
-		Width(leaderWidth).
-		Height(notificationHeight + notificationHeader). // Actual height rendered by NotificationModel.View()
-		Render(m.notification.View())
-
 	footer := m.footerView(width)
 	spacer := lipgloss.NewStyle().Width(gap).Render("")
 
-	// Join leaderboard and notification vertically, with space
-	leaderboardColumn := lipgloss.JoinVertical(lipgloss.Left,
-		leaderboardView,
-		lipgloss.NewStyle().Height(notificationSpace).Render(""), // Space between leaderboard and notifications
-		notificationView,
-	)
-
-	mainArea := lipgloss.JoinHorizontal(lipgloss.Top, contentView, spacer, leaderboardColumn)
+	mainArea := lipgloss.JoinHorizontal(lipgloss.Top, contentView, spacer, leaderboardView)
 
 	ui := lipgloss.JoinVertical(lipgloss.Left, mainArea, footer)
 

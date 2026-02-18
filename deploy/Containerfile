@@ -1,9 +1,24 @@
 # Stage 1: Build
 FROM golang:1.24-alpine AS builder
 WORKDIR /app
-COPY go.mod ./
+COPY go.mod go.sum ./
 RUN go mod download
+
+# Install protobuf tools
+RUN apk add --no-cache protobuf # Installs protoc
+ENV PATH="/go/bin:${PATH}"      # Add go/bin to PATH for protoc-gen-go and protoc-gen-go-grpc
+RUN go install google.golang.org/protobuf/cmd/protoc-gen-go@latest
+RUN go install google.golang.org/grpc/cmd/protoc-gen-go-grpc@latest
+
 COPY . .
+
+# Generate protobuf Go files BEFORE building the Go application
+RUN mkdir -p internal/pb && \
+    protoc --proto_path=. \
+    --go_out=. --go_opt=module=github.com/Mozilla-Campus-Club-of-SLIIT/intro-to-desktop-linux \
+    --go-grpc_out=. --go-grpc_opt=module=github.com/Mozilla-Campus-Club-of-SLIIT/intro-to-desktop-linux \
+    internal/pb/detachment/v1/grpc.proto
+
 RUN CGO_ENABLED=0 GOOS=linux go build -o /app/server ./cmd/server/main.go
 
 # Stage 2: Final Runtime Image (The "Sovereign" lean image)

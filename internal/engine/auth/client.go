@@ -454,6 +454,27 @@ func (c *AuthClient) GetUserInfo() (string, string, []string, error) {
 	return c.session.UserName, c.session.UserEmail, c.session.Roles, nil
 }
 
+// GetUserID returns the UserID from the cached session.
+func (c *AuthClient) GetUserID() (string, error) {
+	c.sessionMu.RLock()
+	defer c.sessionMu.RUnlock()
+	if c.session == nil {
+		return "", fmt.Errorf("not authenticated")
+	}
+	return c.session.UserID, nil
+}
+
+// GetAccessToken returns the AccessToken from the cached session.
+func (c *AuthClient) GetAccessToken() (string, error) {
+	c.sessionMu.RLock()
+	defer c.sessionMu.RUnlock()
+	if c.session == nil {
+		return "", fmt.Errorf("not authenticated")
+	}
+	return c.session.AccessToken, nil
+}
+
+
 // HasRole checks if the user has a specific role
 func (c *AuthClient) HasRole(role string) bool {
 	c.sessionMu.RLock()

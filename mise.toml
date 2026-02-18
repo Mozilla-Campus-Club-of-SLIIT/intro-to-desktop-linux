@@ -1,33 +1,52 @@
 [settings]
 experimental = true
 
+[tools]
+go = "1.24.5"
+"go:golang.org/x/tools/gopls" = "0.21.0"
+
 [hooks]
 enter = """
 if ! command -v podman >/dev/null 2>&1; then
-
-    # 2. Check if os-release file exists
     if [ -f /etc/os-release ]; then
-
-        # 3. Check for Arch Linux
         if grep -q "Arch Linux" /etc/os-release; then
             echo "📦 Arch Linux detected. Installing podman..."
             sudo pacman -S --noconfirm podman
-
-        # 4. Check for Ubuntu (Use apt, not pacman!)
         elif grep -q "Ubuntu" /etc/os-release; then
             echo "📦 Ubuntu detected. Installing podman..."
             sudo apt-get update
             sudo apt-get install -y podman
-
         else
             echo "⚠️ OS detected but not supported. Please install Podman manually."
         fi
-
     else
-     -ldflags="-X main.environment=$APP_ENV"   echo "⚠️ /etc/os-release not found. Cannot detect OS."
+        echo "⚠️ /etc/os-release not found. Cannot detect OS."
     fi
 fi
+mise run check # Run the check task from dev.toml
 """
+
+[tasks.check]
+description = "Verify OS is Arch Linux and archiso is installed"
+run = """
+ # In Dev Env
+ # 1. Check for Arch Linux
+  if [ ! -f /etc/os-release ] || ! grep -q "Arch Linux" /etc/os-release; then
+      echo "❌ Error: Arch Linux required."
+      exit 1
+  fi
+
+  # 2. Check for archiso and install if missing
+  if ! command -v mkarchiso &> /dev/null; then
+    echo "📦 archiso not found. Installing..."
+    sudo pacman -S --noconfirm archiso
+  fi
+"""
+
+[tasks.build-os]
+description = "Build the Live ISO"
+depends = ["check"]
+run = "echo '🚀 Building the OS...'"
 
 [tasks."run"]
 description = "Run the TUI in presenter mode"
@@ -39,4 +58,23 @@ alias = "tui"
 description = "Generate gRPC Go files"
 run = """
 bash -c "mkdir -p internal/pb && protoc --proto_path=. --go_out=. --go_opt=module=github.com/Mozilla-Campus-Club-of-SLIIT/intro-to-desktop-linux --go-grpc_out=. --go-grpc_opt=module=github.com/Mozilla-Campus-Club-of-SLIIT/intro-to-desktop-linux internal/pb/detachment/v1/grpc.proto"
+"""
+
+[tasks."seed-leaderboard"]
+description = "Adds 10 dummy records to the leaderboard using podman exec valkey-cli."
+run = """
+# Check if podman is running and detachment-db container exists
+if ! podman ps --filter "name=detachment-db" --format "{{.ID}}" | grep -q .; then
+    echo "❌ Error: detachment-db container not found or not running. Please start your compose stack."
+    exit 1
+fi
+
+# Add 10 dummy records with increasing scores
+for i in $(seq 1 10); do
+    username="DummyUser$i"
+    score=$(($RANDOM % 1000 + 100 * $i)) # Generate score
+    echo "Adding $username with score $score to leaderboard..."
+    podman exec detachment-db valkey-cli ZADD leaderboard $score "$username"
+done
+echo "Leaderboard seeding complete."
 """

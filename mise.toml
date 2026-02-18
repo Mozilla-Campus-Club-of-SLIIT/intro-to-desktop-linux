@@ -34,3 +34,9 @@ description = "Run the TUI in presenter mode"
 env = { APP_ENV = "presenter" }
 run = 'go run cmd/shell/main.go'
 alias = "tui"
+
+[tasks."proto"]
+description = "Generate gRPC Go files"
+run = """
+bash -c "mkdir -p internal/pb && protoc --proto_path=. --go_out=. --go_opt=module=github.com/Mozilla-Campus-Club-of-SLIIT/intro-to-desktop-linux --go-grpc_out=. --go-grpc_opt=module=github.com/Mozilla-Campus-Club-of-SLIIT/intro-to-desktop-linux internal/pb/detachment/v1/grpc.proto"
+"""

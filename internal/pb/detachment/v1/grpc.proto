@@ -1,0 +1,43 @@
+syntax = "proto3";
+
+package pb.detachment.v1;
+
+option go_package = "github.com/Mozilla-Campus-Club-of-SLIIT/intro-to-desktop-linux/internal/pb";
+
+// DetachmentService handles communication between the client (CLI) and the server.
+service DetachmentService {
+    // GetLeaderboard requests the leaderboard.
+    // The server first sends the full leaderboard, then keeps the connection open to send updates.
+    rpc GetLeaderboard(GetLeaderboardRequest) returns (stream GetLeaderboardResponse);
+
+    // ReportCommand sends a command executed by the user to the server.
+    // This is a one-way communication from client to server.
+    rpc ReportCommand(ReportCommandRequest) returns (ReportCommandResponse);
+}
+
+message GetLeaderboardRequest {
+    string user_id = 1;
+    string access_token = 2;
+}
+
+message GetLeaderboardResponse {
+    // records contains the ordered list of leaderboard entries.
+    repeated LeaderboardRecord records = 1;
+}
+
+message LeaderboardRecord {
+    string username = 1;
+    double score = 2;
+}
+
+message ReportCommandRequest {
+    string user_id = 1;
+    string access_token = 2;
+    string cmd = 3;
+    string username = 4;
+    int64 timestamp = 5; // Unix timestamp
+}
+
+message ReportCommandResponse {
+    bool success = 1;
+}

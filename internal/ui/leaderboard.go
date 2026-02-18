@@ -3,8 +3,8 @@ package ui
 import (
 	"context"
 	"fmt"
-	"log"
 	"strings"
+	"time"
 
 	"github.com/Mozilla-Campus-Club-of-SLIIT/intro-to-desktop-linux/internal/engine/auth"
 	"github.com/Mozilla-Campus-Club-of-SLIIT/intro-to-desktop-linux/internal/engine/leaderboard"
@@ -18,11 +18,32 @@ type MsgLeaderboardUpdate []leaderboard.Entry
 // MsgLeaderboardError is a message sent when an error occurs in the leaderboard stream.
 type MsgLeaderboardError error
 
+// waitForUpdateCmd waits for the next leaderboard update or error from the gRPC stream.
+func waitForUpdateCmd(updates <-chan []leaderboard.Entry, errs <-chan error) tea.Cmd {
+	return func() tea.Msg {
+		select {
+		case update, ok := <-updates:
+			if !ok {
+				return MsgLeaderboardError(fmt.Errorf("leaderboard update stream closed"))
+			}
+			return MsgLeaderboardUpdate(update)
+		case err, ok := <-errs:
+			if !ok {
+				return MsgLeaderboardError(fmt.Errorf("leaderboard error stream closed"))
+			}
+			return MsgLeaderboardError(err)
+		}
+	}
+}
+
 type LeaderboardModel struct {
 	width  int
 	height int
 
-	leaderboardClient  *leaderboard.LeaderboardClient
+	leaderboardClient *leaderboard.LeaderboardClient
+	updates           <-chan []leaderboard.Entry // Channel for leaderboard updates
+	errs              <-chan error               // Channel for stream errors
+
 	currentLeaderboard []leaderboard.Entry
 	leaderboardErr     error
 
@@ -35,105 +56,69 @@ type LeaderboardModel struct {
 }
 
 // NewLeaderboardModel creates and initializes a new LeaderboardModel.
-func NewLeaderboardModel(width, height int) LeaderboardModel {
-	// Initialize with dummy values, actual client and stream started in Init()
-	return LeaderboardModel{
+func NewLeaderboardModel(width, height int) *LeaderboardModel {
+	return &LeaderboardModel{
 		width:              width,
 		height:             height,
 		currentLeaderboard: []leaderboard.Entry{},
 	}
 }
 
-// Init initializes the model and starts the leaderboard stream.
-func (m *LeaderboardModel) Init() tea.Cmd { // Changed to pointer receiver
-	// Initialize context for the gRPC stream FIRST
-	m.ctx, m.cancel = context.WithCancel(context.Background())
-	log.Printf("LeaderboardModel.Init: Context initialized (m.ctx: %p)", m.ctx)
-
-	authClient := auth.GetClient()
-
-	// Get currentUser (username) for display
-	var err error
-	m.currentUser, _, _, err = authClient.GetUserInfo()
-	if err != nil {
-		m.leaderboardErr = fmt.Errorf("failed to get user info: %w", err)
-		log.Printf("LeaderboardModel.Init: Failed to get user info: %v", err)
-		return nil
-	}
-
-	m.userID, err = authClient.GetUserID()
-	if err != nil {
-		m.leaderboardErr = fmt.Errorf("failed to get user ID: %w", err)
-		log.Printf("LeaderboardModel.Init: Failed to get user ID: %v", err)
-		return nil
-	}
-
-	m.accessToken, err = authClient.GetAccessToken()
-	if err != nil {
-		m.leaderboardErr = fmt.Errorf("failed to get access token: %w", err)
-		log.Printf("LeaderboardModel.Init: Failed to get access token: %v", err)
-		return nil
-	}
-	log.Printf("LeaderboardModel.Init: User %s (ID: %s) authenticated.", m.currentUser, m.userID)
-
-
-	m.leaderboardClient, err = leaderboard.NewLeaderboardClient(m.ctx)
-	if err != nil {
-		m.leaderboardErr = fmt.Errorf("failed to create leaderboard client: %w", err)
-		log.Printf("LeaderboardModel.Init: Failed to create leaderboard client: %v", err)
-		return nil // No command, as client failed
-	}
-	log.Printf("LeaderboardModel.Init: Leaderboard client created with context %p.", m.ctx)
-
-	return m.listenForLeaderboardUpdates()
-}
-
-// listenForLeaderboardUpdates starts a goroutine to listen for leaderboard updates
-// and sends them as tea.Msg to the main Update loop.
-func (m *LeaderboardModel) listenForLeaderboardUpdates() tea.Cmd { // Changed to pointer receiver
-	log.Printf("listenForLeaderboardUpdates: Starting stream for user %s (ID: %s) with context %p", m.currentUser, m.userID, m.ctx)
-	updates, errs := m.leaderboardClient.GetLeaderboardStream(m.ctx, m.userID, m.accessToken)
-
+// sendNotificationCmd creates a tea.Cmd to send a notification message.
+func sendNotificationCmd(message string, isError bool) tea.Cmd {
 	return func() tea.Msg {
-		for {
-			select {
-			case <-m.ctx.Done():
-				log.Printf("listenForLeaderboardUpdates goroutine: Context cancelled. Error: %v", m.ctx.Err())
-				// Context cancelled, clean up client connection
-				if m.leaderboardClient != nil {
-					m.leaderboardClient.Close()
-				}
-				return nil // Stop sending messages
-			case update, ok := <-updates:
-				if !ok {
-					log.Println("listenForLeaderboardUpdates goroutine: Leaderboard update channel closed.")
-					if m.leaderboardClient != nil {
-						m.leaderboardClient.Close()
-					}
-					return MsgLeaderboardError(fmt.Errorf("leaderboard stream closed unexpectedly"))
-				}
-				log.Printf("listenForLeaderboardUpdates goroutine: Received %d leaderboard updates.", len(update))
-				return MsgLeaderboardUpdate(update)
-			case err, ok := <-errs:
-				if !ok {
-					log.Println("listenForLeaderboardUpdates goroutine: Leaderboard error channel closed.")
-					if m.leaderboardClient != nil {
-						m.leaderboardClient.Close()
-					}
-					return MsgLeaderboardError(fmt.Errorf("leaderboard error stream closed unexpectedly"))
-				}
-				if err != nil {
-					log.Printf("listenForLeaderboardUpdates goroutine: Received error from stream: %v", err)
-					// Don't close client here, stream might recover or next update will fail
-					return MsgLeaderboardError(err)
-				}
-			}
+		return MsgNotification{
+			Timestamp: time.Now(),
+			Message:   message,
+			IsError:   isError,
 		}
 	}
 }
 
+// Init initializes the model and starts the leaderboard stream.
+func (m *LeaderboardModel) Init() tea.Cmd {
+	m.ctx, m.cancel = context.WithCancel(context.Background())
+	authClient := auth.GetClient()
+
+	var err error
+	m.currentUser, _, _, err = authClient.GetUserInfo()
+	if err != nil {
+		return sendNotificationCmd(fmt.Sprintf("Failed to get user info: %v", err), true)
+	}
+
+	m.userID, err = authClient.GetUserID()
+	if err != nil {
+		return sendNotificationCmd(fmt.Sprintf("Failed to get user ID: %v", err), true)
+	}
+
+	m.accessToken, err = authClient.GetAccessToken()
+	if err != nil {
+		return sendNotificationCmd(fmt.Sprintf("Failed to get access token: %v", err), true)
+	}
+
+	m.leaderboardClient, err = leaderboard.NewLeaderboardClient(m.ctx)
+	if err != nil {
+		return sendNotificationCmd(fmt.Sprintf("Failed to create leaderboard client: %v", err), true)
+	}
+
+	// Start the stream and get the channels
+	m.updates, m.errs = m.leaderboardClient.GetLeaderboardStream(m.ctx, m.userID, m.accessToken)
+
+	// Return the first waitForUpdateCmd to start listening
+	return tea.Batch(
+		sendNotificationCmd(fmt.Sprintf("User %s authenticated, starting stream.", m.currentUser), false),
+		waitForUpdateCmd(m.updates, m.errs),
+	)
+}
+
 // Update handles messages.
-func (m *LeaderboardModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) { // Changed to pointer receiver
+func (m *LeaderboardModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
+	switch msg := msg.(type) {
+	case tea.WindowSizeMsg:
+		m.width = msg.Width
+		m.height = msg.Height
+	}
+
 	switch msg := msg.(type) {
 	case tea.KeyMsg:
 		switch msg.String() {
@@ -146,21 +131,23 @@ func (m *LeaderboardModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) { // Changed
 	case MsgLeaderboardUpdate:
 		m.currentLeaderboard = msg
 		m.leaderboardErr = nil // Clear any previous errors
-		return m, nil          // Do NOT return m.listenForLeaderboardUpdates() again
+		// Return a new command to wait for the next update
+		return m, waitForUpdateCmd(m.updates, m.errs)
 	case MsgLeaderboardError:
 		m.leaderboardErr = msg
-		// Maybe retry or just display error. For now, just display.
+		// Optionally, you might want to stop listening on error, or try to reconnect.
+		// For now, we'll stop listening.
 		return m, nil
 	}
 	return m, nil
 }
 
 // View renders the leaderboard UI.
-func (m LeaderboardModel) View() string {
+func (m *LeaderboardModel) View() string {
 	const diag = "#"
 
 	// 1. Header Rendering
-	headerText := "Live Leaderboard " + m.currentUser
+	headerText := "Live Leaderboard "
 	headerTextWidth := lipgloss.Width(headerText)
 	paddingWidth := 2
 	remainingWidth := max(m.width-headerTextWidth-paddingWidth, 0)
@@ -215,7 +202,7 @@ func (m LeaderboardModel) View() string {
 
 		rowContent := lipgloss.JoinHorizontal(lipgloss.Left, sRank, sName, sScore)
 
-		style := lipgloss.NewStyle().Width(m.width).Padding(0, 1) // Corrected: NewInStyle -> NewStyle()
+		style := lipgloss.NewStyle().Width(m.width).Padding(0, 1)
 		if entry.Username == m.currentUser {
 			style = style.Background(ColorWarmRed).Foreground(ColorWhite)
 		}
@@ -315,11 +302,4 @@ func (m LeaderboardModel) View() string {
 		Render(strings.Join(rows, "\n"))
 
 	return lipgloss.JoinVertical(lipgloss.Left, header, list)
-}
-
-func max(a, b int) int {
-	if a > b {
-		return a
-	}
-	return b
 }

@@ -9,11 +9,11 @@ import (
 )
 
 const (
-	StreamCmdLogs     = "cmdlogs"
-	GroupProcessed    = "processed"
-	ZSetLeaderboard   = "leaderboard"
+	StreamCmdLogs      = "cmdlogs"
+	GroupProcessed     = "processed"
+	ZSetLeaderboard    = "leaderboard"
 	HashSessionsPrefix = "sessions:"
-	
+
 	ChannelLeaderboard = "leaderboard_updates"
 	ChannelSessions    = "session_updates"
 )
@@ -95,7 +95,12 @@ func (db *DB) UpdateScore(ctx context.Context, username string, score float64) e
 
 // GetLeaderboard returns the top users and their scores.
 func (db *DB) GetLeaderboard(ctx context.Context, topN int64) ([]valkey.ZScore, error) {
-	resp, err := db.client.Do(ctx, db.client.B().Zrevrange().Key(ZSetLeaderboard).Start(0).Stop(topN-1).Withscores().Build()).AsZScores()
+	// When topN == -1, use stop = -1 to fetch all records
+	stop := topN - 1
+	if topN < 0 {
+		stop = -1
+	}
+	resp, err := db.client.Do(ctx, db.client.B().Zrevrange().Key(ZSetLeaderboard).Start(0).Stop(stop).Withscores().Build()).AsZScores()
 	if err != nil {
 		return nil, err
 	}
@@ -183,7 +188,7 @@ func (db *DB) ReadCmdLogs(ctx context.Context, consumerName string, count int64)
 		Key(StreamCmdLogs).
 		Id(">").
 		Build()).AsXRead()
-	
+
 	if err != nil {
 		return nil, err
 	}
@@ -191,6 +196,6 @@ func (db *DB) ReadCmdLogs(ctx context.Context, consumerName string, count int64)
 	if entries, ok := resp[StreamCmdLogs]; ok {
 		return entries, nil
 	}
-	
+
 	return nil, nil
 }

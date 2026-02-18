@@ -10,7 +10,9 @@ import (
 
 	pb "github.com/Mozilla-Campus-Club-of-SLIIT/intro-to-desktop-linux/internal/pb"
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/credentials/insecure"
+	"google.golang.org/grpc/status"
 )
 
 const (
@@ -73,44 +75,47 @@ func (lc *LeaderboardClient) GetLeaderboardStream(ctx context.Context, userID, a
 		}
 
 		for {
-			select {
-			case <-ctx.Done():
-				errCh <- ctx.Err()
+			resp, err := stream.Recv() // This blocks until a message is received or error occurs.
+			if err == io.EOF {
+				log.Println("Leaderboard stream closed by server (EOF).")
+				return // Stream ended gracefully
+			}
+			if err != nil {
+				// Check if the error is due to context cancellation specifically from the gRPC stream.
+				if status.Code(err) == codes.Canceled {
+					log.Println("Leaderboard stream cancelled, likely by client context.")
+					// No need to send to errCh, as ctx.Err() will handle the client-side cleanup.
+					return
+				}
+				errCh <- fmt.Errorf("failed to receive leaderboard update: %w", err)
 				return
-			default:
-				resp, err := stream.Recv()
-				if err == io.EOF {
-					log.Println("Leaderboard stream closed by server.")
-					return
-				}
-				if err != nil {
-					errCh <- fmt.Errorf("failed to receive leaderboard update: %w", err)
-					return
-				}
+			}
 
-				var currentLeaderboard []Entry
-				for _, record := range resp.Records {
-					currentLeaderboard = append(currentLeaderboard, Entry{
-						Username: record.Username,
-						Score:    record.Score,
-					})
-				}
-
-				// Re-sort the leaderboard just in case, or for client-specific ordering needs
-				sort.Slice(currentLeaderboard, func(i, j int) bool {
-					return currentLeaderboard[i].Score > currentLeaderboard[j].Score
+			var currentLeaderboard []Entry
+			for _, record := range resp.Records {
+				currentLeaderboard = append(currentLeaderboard, Entry{
+					Username: record.Username,
+					Score:    record.Score,
 				})
+			}
 
-				select {
-				case updateCh <- currentLeaderboard:
-					// Successfully sent update
-				case <-ctx.Done():
-					errCh <- ctx.Err()
-					return
-				case <-time.After(5 * time.Second): // Timeout for sending update
-					log.Println("Timeout sending leaderboard update, client not consuming fast enough.")
-					// Depending on requirements, could return error or drop update
-				}
+			// Re-sort the leaderboard just in case, or for client-specific ordering needs
+			sort.Slice(currentLeaderboard, func(i, j int) bool {
+				return currentLeaderboard[i].Score > currentLeaderboard[j].Score
+			})
+
+			// Attempt to send the update to the update channel.
+			// Use a select to ensure non-blocking send and respect context cancellation.
+			select {
+			case updateCh <- currentLeaderboard:
+				// Successfully sent update
+			case <-ctx.Done(): // If client context is done while trying to send
+				log.Println("Leaderboard stream goroutine: Context cancelled while sending update.")
+				errCh <- ctx.Err() // Propagate this specific cancellation
+				return
+			case <-time.After(5 * time.Second): // Timeout for sending update if client is too slow
+				log.Println("Timeout sending leaderboard update, client not consuming fast enough. Dropping update.")
+				// Depending on requirements, could return error or drop update. For now, drop.
 			}
 		}
 	}()

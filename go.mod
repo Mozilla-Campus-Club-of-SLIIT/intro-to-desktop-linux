@@ -1,12 +1,13 @@
 module github.com/Mozilla-Campus-Club-of-SLIIT/intro-to-desktop-linux
 
-go 1.24.5
+go 1.24.9
 
 require (
 	github.com/charmbracelet/bubbles v1.0.0
 	github.com/charmbracelet/bubbletea v1.3.10
 	github.com/charmbracelet/lipgloss v1.1.0
 	github.com/creack/pty v1.1.24
+	github.com/valkey-io/valkey-go v1.0.72
 )
 
 require (

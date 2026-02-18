@@ -18,6 +18,8 @@ const (
 	ChannelSessions    = "session_updates"
 )
 
+var ErrSessionNotFound = fmt.Errorf("session not found")
+
 // DB wraps the valkey client and provides helper methods for our application logic.
 type DB struct {
 	client valkey.Client
@@ -103,17 +105,21 @@ func (db *DB) GetLeaderboard(ctx context.Context, topN int64) ([]valkey.ZScore, 
 // --- Sessions (Hash) ---
 
 // SetSession sets or updates a user session.
+// It stores the session ID and the expiration timestamp (calculated from ttl) in a hash,
+// and also sets a key expiration for automatic cleanup.
 func (db *DB) SetSession(ctx context.Context, username, id string, ttl time.Duration) error {
 	key := HashSessionsPrefix + username
+	expiresAt := time.Now().Add(ttl) // Calculate expiration timestamp
+
 	// Set fields in Hash
 	err := db.client.Do(ctx, db.client.B().Hset().Key(key).FieldValue().
 		FieldValue("id", id).
-		FieldValue("ttl", ttl.String()).
+		FieldValue("expiresAt", expiresAt.Format(time.RFC3339)). // Store timestamp in hash
 		Build()).Error()
 	if err != nil {
 		return err
 	}
-	
+
 	// Also set expiration on the key itself so it automatically cleans up
 	if ttl > 0 {
 		if err := db.client.Do(ctx, db.client.B().Expire().Key(key).Seconds(int64(ttl.Seconds())).Build()).Error(); err != nil {
@@ -122,13 +128,20 @@ func (db *DB) SetSession(ctx context.Context, username, id string, ttl time.Dura
 	}
 
 	// Notify subscribers about session update
-	return db.PublishSessionUpdate(ctx, fmt.Sprintf("set:%s:%s", username, id))
+	return db.PublishSessionUpdate(ctx, fmt.Sprintf("set:%s:%s:%s", username, id, expiresAt.Format(time.RFC3339)))
 }
 
-// GetSession retrieves the session ID for a user.
+// GetSession retrieves the session ID and expiration for a user.
 func (db *DB) GetSession(ctx context.Context, username string) (map[string]string, error) {
 	key := HashSessionsPrefix + username
-	return db.client.Do(ctx, db.client.B().Hgetall().Key(key).Build()).AsStrMap()
+	sessionMap, err := db.client.Do(ctx, db.client.B().Hgetall().Key(key).Build()).AsStrMap()
+	if err != nil {
+		return nil, err
+	}
+	if len(sessionMap) == 0 {
+		return nil, ErrSessionNotFound
+	}
+	return sessionMap, nil
 }
 
 // DeleteSession removes a user's session.

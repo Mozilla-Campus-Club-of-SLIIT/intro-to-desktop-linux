@@ -16,3 +16,6 @@ bin/
 
 # db Files
 deploy/valkey-data
+
+# tmp
+tmp/

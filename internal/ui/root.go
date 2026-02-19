@@ -44,6 +44,9 @@ func (m *RootModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 
 	case switchToDashboardMsg:
+		if s, ok := m.activeModel.(interface{ Stop() }); ok {
+			s.Stop()
+		}
 		m.activeModel = NewDashboardModel()
 
 		if m.width > 0 && m.height > 0 {

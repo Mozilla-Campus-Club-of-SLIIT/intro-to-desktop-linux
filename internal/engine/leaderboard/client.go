@@ -13,6 +13,7 @@ import (
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/credentials/insecure"
+	"google.golang.org/grpc/keepalive"
 	"google.golang.org/grpc/status"
 )
 
@@ -20,6 +21,12 @@ const (
 	// grpcServerAddress is the address of the gRPC server.
 	grpcServerAddress = "mozlive-grpc.mrbhanuka.dev:50051"
 )
+
+// MsgLeaderboardUpdate is the message sent to the TUI when the leaderboard state changes.
+type MsgLeaderboardUpdate []Entry
+
+// MsgLeaderboardError is the message sent to the TUI when a stream error occurs.
+type MsgLeaderboardError error
 
 // Entry represents a single record in the leaderboard.
 type Entry struct {
@@ -36,7 +43,11 @@ var (
 func GetClient(ctx context.Context) (*LeaderboardClient, error) {
 	var err error
 	clientOnce.Do(func() {
-		globalClient, err = NewLeaderboardClient(ctx)
+		globalClient, err = NewLeaderboardClient()
+		if err == nil {
+			// Start the single long-lived background stream
+			go globalClient.runBackground()
+		}
 	})
 	return globalClient, err
 }
@@ -49,18 +60,35 @@ type LeaderboardClient struct {
 	mu                 sync.RWMutex
 	currentLeaderboard []Entry
 	leaderboardErr     error
+
+	subscribers []chan MsgLeaderboardUpdate
+	errSubs     []chan MsgLeaderboardError
 }
 
 // NewLeaderboardClient creates a new LeaderboardClient and establishes a gRPC connection.
-func NewLeaderboardClient(ctx context.Context) (*LeaderboardClient, error) {
-	conn, err := grpc.NewClient(grpcServerAddress, grpc.WithTransportCredentials(insecure.NewCredentials()))
+func NewLeaderboardClient() (*LeaderboardClient, error) {
+	// Adjusted keepalive to be less aggressive to avoid "too_many_pings" (ENHANCE_YOUR_CALM)
+	// Server likely has a MinTime policy.
+	kacp := keepalive.ClientParameters{
+		Time:                60 * time.Second, // Ping every 60 seconds
+		Timeout:             20 * time.Second, // Wait 20 seconds for response
+		PermitWithoutStream: false,            // Only ping if there is an active stream
+	}
+
+	conn, err := grpc.NewClient(
+		grpcServerAddress,
+		grpc.WithTransportCredentials(insecure.NewCredentials()),
+		grpc.WithKeepaliveParams(kacp),
+	)
 	if err != nil {
 		return nil, fmt.Errorf("failed to connect to gRPC server: %w", err)
 	}
 	client := pb.NewDetachmentServiceClient(conn)
 	return &LeaderboardClient{
-		client: client,
-		conn:   conn,
+		client:      client,
+		conn:        conn,
+		subscribers: make([]chan MsgLeaderboardUpdate, 0),
+		errSubs:     make([]chan MsgLeaderboardError, 0),
 	}, nil
 }
 
@@ -77,115 +105,46 @@ func (lc *LeaderboardClient) GetEntries() []Entry {
 	lc.mu.RLock()
 	defer lc.mu.RUnlock()
 
-	// Return a copy to avoid data race and external modification
 	entries := make([]Entry, len(lc.currentLeaderboard))
 	copy(entries, lc.currentLeaderboard)
 	return entries
 }
 
-// GetError returns the last error encountered during streaming.
-func (lc *LeaderboardClient) GetError() error {
-	lc.mu.RLock()
-	defer lc.mu.RUnlock()
-	return lc.leaderboardErr
-}
+// Start establishes a subscription to the single background leaderboard stream.
+func (lc *LeaderboardClient) Start(ctx context.Context) (<-chan MsgLeaderboardUpdate, <-chan MsgLeaderboardError) {
+	updateCh := make(chan MsgLeaderboardUpdate, 1)
+	errCh := make(chan MsgLeaderboardError, 1)
 
-// Start establishes a streaming connection to the leaderboard service and maintains the internal state.
-// It returns channels for updates and errors.
-func (lc *LeaderboardClient) Start(ctx context.Context) (<-chan []Entry, <-chan error) {
-	updateCh := make(chan []Entry)
-	errCh := make(chan error, 1)
+	lc.mu.Lock()
+	lc.subscribers = append(lc.subscribers, updateCh)
+	lc.errSubs = append(lc.errSubs, errCh)
+
+	// Immediately send current state if available
+	if len(lc.currentLeaderboard) > 0 {
+		entries := make([]Entry, len(lc.currentLeaderboard))
+		copy(entries, lc.currentLeaderboard)
+		updateCh <- MsgLeaderboardUpdate(entries)
+	}
+	if lc.leaderboardErr != nil {
+		errCh <- MsgLeaderboardError(lc.leaderboardErr)
+	}
+	lc.mu.Unlock()
 
 	go func() {
-		defer close(updateCh)
-		defer close(errCh)
+		<-ctx.Done()
+		lc.mu.Lock()
+		defer lc.mu.Unlock()
 
-		authClient := auth.GetClient()
-
-		for {
-			select {
-			case <-ctx.Done():
-				return
-			default:
+		for i, sub := range lc.subscribers {
+			if sub == updateCh {
+				lc.subscribers = append(lc.subscribers[:i], lc.subscribers[i+1:]...)
+				break
 			}
-
-			userID, err := authClient.GetUserID()
-			if err != nil {
-				lc.handleError(ctx, errCh, fmt.Errorf("failed to get user ID: %w", err))
-				select {
-				case <-ctx.Done():
-					return
-				case <-time.After(2 * time.Second):
-					continue
-				}
-			}
-
-			accessToken, err := authClient.GetAccessToken()
-			if err != nil {
-				lc.handleError(ctx, errCh, fmt.Errorf("failed to get access token: %w", err))
-				select {
-				case <-ctx.Done():
-					return
-				case <-time.After(2 * time.Second):
-					continue
-				}
-			}
-
-			req := &pb.GetLeaderboardRequest{
-				UserId:      userID,
-				AccessToken: accessToken,
-			}
-
-			stream, err := lc.client.GetLeaderboard(ctx, req)
-			if err != nil {
-				lc.handleError(ctx, errCh, fmt.Errorf("failed to open leaderboard stream: %w", err))
-				select {
-				case <-ctx.Done():
-					return
-				case <-time.After(5 * time.Second):
-					continue
-				}
-			}
-
-			lc.updateState(nil, nil) // Clear error on successful connection
-
-		recvLoop:
-			for {
-				resp, err := stream.Recv()
-				if err == io.EOF {
-					break recvLoop
-				}
-				if err != nil {
-					if status.Code(err) == codes.Canceled {
-						return
-					}
-					lc.handleError(ctx, errCh, fmt.Errorf("failed to receive leaderboard update: %w", err))
-					break recvLoop
-				}
-
-				var entries []Entry
-				for _, record := range resp.Records {
-					entries = append(entries, Entry{
-						Username: record.Username,
-						Score:    record.Score,
-					})
-				}
-
-				lc.sortEntries(entries)
-				lc.updateState(entries, nil)
-
-				select {
-				case updateCh <- entries:
-				case <-ctx.Done():
-					return
-				default:
-				}
-			}
-
-			select {
-			case <-ctx.Done():
-				return
-			case <-time.After(2 * time.Second):
+		}
+		for i, sub := range lc.errSubs {
+			if sub == errCh {
+				lc.errSubs = append(lc.errSubs[:i], lc.errSubs[i+1:]...)
+				break
 			}
 		}
 	}()
@@ -193,34 +152,137 @@ func (lc *LeaderboardClient) Start(ctx context.Context) (<-chan []Entry, <-chan 
 	return updateCh, errCh
 }
 
-// handleError updates internal state and sends error to channel if possible.
-func (lc *LeaderboardClient) handleError(ctx context.Context, errCh chan<- error, err error) {
-	lc.updateState(nil, err)
-	select {
-	case errCh <- err:
-	case <-ctx.Done():
-	default:
+// runBackground manages the single gRPC stream in the background.
+func (lc *LeaderboardClient) runBackground() {
+	bgCtx := context.Background()
+	authClient := auth.GetClient()
+
+	for {
+		userID, err := authClient.GetUserID()
+		if err != nil {
+			time.Sleep(5 * time.Second)
+			continue
+		}
+		accessToken, err := authClient.GetAccessToken()
+		if err != nil {
+			time.Sleep(5 * time.Second)
+			continue
+		}
+
+		req := &pb.GetLeaderboardRequest{
+			UserId:      userID,
+			AccessToken: accessToken,
+		}
+
+		stream, err := lc.client.GetLeaderboard(bgCtx, req)
+		if err != nil {
+			lc.broadcastError(fmt.Errorf("failed to open leaderboard stream: %w", err))
+			time.Sleep(10 * time.Second)
+			continue
+		}
+
+		lc.updateState(nil, nil)
+
+		for {
+			resp, err := stream.Recv()
+			if err == io.EOF {
+				break
+			}
+			if err != nil {
+				if status.Code(err) != codes.Canceled {
+					lc.broadcastError(fmt.Errorf("leaderboard stream lost: %w", err))
+				}
+				break
+			}
+
+			var entries []Entry
+			for _, record := range resp.Records {
+				entries = append(entries, Entry{
+					Username: record.Username,
+					Score:    record.Score,
+				})
+			}
+
+			lc.sortEntries(entries)
+			if lc.updateState(entries, nil) {
+				lc.broadcastUpdate(entries)
+			}
+		}
+
+		time.Sleep(5 * time.Second)
 	}
 }
 
-// updateState safely updates the internal leaderboard state.
-func (lc *LeaderboardClient) updateState(entries []Entry, err error) {
+func (lc *LeaderboardClient) broadcastUpdate(entries []Entry) {
+	lc.mu.RLock()
+	defer lc.mu.RUnlock()
+	msg := MsgLeaderboardUpdate(entries)
+	for _, sub := range lc.subscribers {
+		select {
+		case sub <- msg:
+		default:
+		}
+	}
+}
+
+func (lc *LeaderboardClient) broadcastError(err error) {
+	if !lc.updateState(nil, err) {
+		return
+	}
+	lc.mu.RLock()
+	defer lc.mu.RUnlock()
+	msg := MsgLeaderboardError(err)
+	for _, sub := range lc.errSubs {
+		select {
+		case sub <- msg:
+		default:
+		}
+	}
+}
+
+func (lc *LeaderboardClient) updateState(entries []Entry, err error) bool {
 	lc.mu.Lock()
 	defer lc.mu.Unlock()
-	if entries != nil {
-		lc.currentLeaderboard = entries
+
+	changed := false
+
+	// Handle error update
+	if err != nil {
+		if lc.leaderboardErr == nil || lc.leaderboardErr.Error() != err.Error() {
+			lc.leaderboardErr = err
+			changed = true
+		}
+	} else if lc.leaderboardErr != nil {
+		lc.leaderboardErr = nil
+		changed = true
 	}
-	lc.leaderboardErr = err
+
+	// Handle entries update
+	if entries != nil {
+		isEqual := len(entries) == len(lc.currentLeaderboard)
+		if isEqual {
+			for i := range entries {
+				if entries[i].Username != lc.currentLeaderboard[i].Username || entries[i].Score != lc.currentLeaderboard[i].Score {
+					isEqual = false
+					break
+				}
+			}
+		}
+
+		if !isEqual {
+			lc.currentLeaderboard = entries
+			changed = true
+		}
+	}
+
+	return changed
 }
 
-// sortEntries handles the sorting logic for the leaderboard.
 func (lc *LeaderboardClient) sortEntries(entries []Entry) {
 	sort.Slice(entries, func(i, j int) bool {
-		// Sort by score descending
 		if entries[i].Score != entries[j].Score {
 			return entries[i].Score > entries[j].Score
 		}
-		// Then by username ascending for deterministic ordering
 		return entries[i].Username < entries[j].Username
 	})
 }

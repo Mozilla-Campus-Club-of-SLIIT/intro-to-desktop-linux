@@ -33,6 +33,12 @@ func (m *DashboardModel) Init() tea.Cmd {
 	return tea.Batch(cmds...)
 }
 
+func (m *DashboardModel) Stop() {
+	if m.leaderboard != nil {
+		m.leaderboard.Stop()
+	}
+}
+
 func (m *DashboardModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	var cmds []tea.Cmd
 	var newModel tea.Model

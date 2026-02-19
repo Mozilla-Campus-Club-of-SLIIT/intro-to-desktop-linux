@@ -11,26 +11,22 @@ import (
 	"github.com/charmbracelet/lipgloss"
 )
 
-// MsgLeaderboardUpdate is a message sent when the leaderboard updates.
-type MsgLeaderboardUpdate []leaderboard.Entry
-
-// MsgLeaderboardError is a message sent when an error occurs in the leaderboard stream.
-type MsgLeaderboardError error
-
 // waitForUpdateCmd waits for the next leaderboard update or error from the gRPC stream.
-func waitForUpdateCmd(updates <-chan []leaderboard.Entry, errs <-chan error) tea.Cmd {
+func waitForUpdateCmd(ctx context.Context, updates <-chan leaderboard.MsgLeaderboardUpdate, errs <-chan leaderboard.MsgLeaderboardError) tea.Cmd {
 	return func() tea.Msg {
 		select {
+		case <-ctx.Done():
+			return nil
 		case update, ok := <-updates:
 			if !ok {
 				return nil
 			}
-			return MsgLeaderboardUpdate(update)
+			return update
 		case err, ok := <-errs:
 			if !ok {
 				return nil
 			}
-			return MsgLeaderboardError(err)
+			return err
 		}
 	}
 }
@@ -40,14 +36,14 @@ type LeaderboardModel struct {
 	height int
 
 	leaderboardClient *leaderboard.LeaderboardClient
-	updates           <-chan []leaderboard.Entry // Channel for leaderboard updates
-	errs              <-chan error               // Channel for stream errors
+	updates           <-chan leaderboard.MsgLeaderboardUpdate
+	errs              <-chan leaderboard.MsgLeaderboardError
 
 	currentLeaderboard []leaderboard.Entry
 	leaderboardErr     error
 
 	ctx    context.Context
-	cancel context.CancelFunc // For cancelling the gRPC stream
+	cancel context.CancelFunc
 
 	currentUser string // For display in header
 }
@@ -79,11 +75,18 @@ func (m *LeaderboardModel) Init() tea.Cmd {
 		return nil
 	}
 
-	// Start the stream and get the channels
+	// Start the subscription to the background stream
 	m.updates, m.errs = m.leaderboardClient.Start(m.ctx)
 
 	// Return the first waitForUpdateCmd to start listening
-	return waitForUpdateCmd(m.updates, m.errs)
+	return waitForUpdateCmd(m.ctx, m.updates, m.errs)
+}
+
+// Stop stops the leaderboard stream and cleans up resources.
+func (m *LeaderboardModel) Stop() {
+	if m.cancel != nil {
+		m.cancel()
+	}
 }
 
 // Update handles messages.
@@ -95,15 +98,13 @@ func (m *LeaderboardModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	}
 
 	switch msg := msg.(type) {
-	case MsgLeaderboardUpdate:
+	case leaderboard.MsgLeaderboardUpdate:
 		m.currentLeaderboard = msg
-		m.leaderboardErr = nil // Clear any previous errors
-		// Return a new command to wait for the next update
-		return m, waitForUpdateCmd(m.updates, m.errs)
-	case MsgLeaderboardError:
+		m.leaderboardErr = nil
+		return m, waitForUpdateCmd(m.ctx, m.updates, m.errs)
+	case leaderboard.MsgLeaderboardError:
 		m.leaderboardErr = msg
-		// Continue listening for the next update or error (client handles reconnection)
-		return m, waitForUpdateCmd(m.updates, m.errs)
+		return m, waitForUpdateCmd(m.ctx, m.updates, m.errs)
 	}
 	return m, nil
 }
@@ -155,8 +156,8 @@ func (m *LeaderboardModel) View() string {
 			rankStr = fmt.Sprintf("#%d", rank+1)
 		}
 
-		scoreStr := fmt.Sprintf("%04.0f", entry.Score)                        // Format float64 score
-		if entry.Score == 0 && rank >= 5 && entry.Username != m.currentUser { // Don't show actual score if it's 0 and not current user and not top 5
+		scoreStr := fmt.Sprintf("%04.0f", entry.Score)
+		if entry.Score == 0 && rank >= 5 && entry.Username != m.currentUser {
 			scoreStr = "...."
 		}
 
@@ -174,7 +175,6 @@ func (m *LeaderboardModel) View() string {
 		return style.Render(rowContent)
 	}
 
-	// formatLoadingRow creates a row with "..." placeholders for loading state.
 	formatLoadingRow := func() string {
 		sRank := lipgloss.NewStyle().Width(rankWidth).Render("...")
 		sName := lipgloss.NewStyle().Width(nameWidth).Render("...")
@@ -183,7 +183,6 @@ func (m *LeaderboardModel) View() string {
 		return lipgloss.NewStyle().Width(m.width).Padding(0, 1).Render(rowContent)
 	}
 
-	// 2. Data Preparation - now using m.currentLeaderboard
 	entries := m.currentLeaderboard
 	if len(entries) == 0 {
 		var loadingRows []string
@@ -202,7 +201,6 @@ func (m *LeaderboardModel) View() string {
 	}
 
 	// 3. Layout Calculation
-	// Total height - 1 (header) - 1 (top space) - 1 (bottom space)
 	contentHeight := m.height - 3
 	if contentHeight <= 0 {
 		return header
@@ -234,27 +232,23 @@ func (m *LeaderboardModel) View() string {
 	if remainingSlots > 0 {
 		startIdx := 3
 
-		// Logic to ensure current user is visible if they are further down
 		if userRank >= startIdx+remainingSlots {
-			// Show as many as possible before the "..."
 			for i := startIdx; i < startIdx+remainingSlots-2 && i < len(entries); i++ {
 				rows = append(rows, formatRow(i, entries[i]))
 			}
-			if len(entries) > startIdx+remainingSlots-2 { // Add ... only if there are more entries
+			if len(entries) > startIdx+remainingSlots-2 {
 				rows = append(rows, lipgloss.NewStyle().PaddingLeft(2).Render("..."))
 			}
-			if userRank != -1 { // Only add user's row if found
+			if userRank != -1 {
 				rows = append(rows, formatRow(userRank, entries[userRank]))
 			}
 		} else {
-			// Sequential fill
 			for i := startIdx; i < len(entries) && len(rows) < contentHeight; i++ {
 				rows = append(rows, formatRow(i, entries[i]))
 			}
 		}
 	}
 
-	// Truncate if logic overflowed
 	if len(rows) > contentHeight {
 		rows = rows[:contentHeight]
 	}

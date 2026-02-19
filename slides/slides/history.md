@@ -81,6 +81,15 @@ image: 'assets/gpl.webp'
 </div>
 
 ---
+layout: intro-image-right
+image: 'assets/kernel.webp'
+---
+
+<h1 class="text-lemonYellow">Kernel ?</h1>
+<h2 class="text-warmRed">and why gnu+linux?</h2>
+
+
+---
 layout: image
 image: 'assets/gnulinux.webp'
 ---

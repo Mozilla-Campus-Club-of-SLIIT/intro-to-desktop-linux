@@ -1,61 +1,49 @@
 ---
-layout: statement
+layout: intro-image-right
+image: 'assets/tate.webp'
 ---
 
-<h1 class="text-lemonYellow">Escape the GUI</h1>
+
+<h1 class="text-lemonYellow">Escape the Matrix</h1>
+Just kidding, let's escape the GUI!!!
 
 ---
-layout: intro
+layout: intro-image-right
+image: 'assets/list.gif'
 ---
 
 <h1 class="text-warmRed">List Files</h1>
 
 ````md magic-move {lines: true}
 ```bash {1}
-mrbhanuka@sliitmozilla.org /m/h/D/D/P/m/i/slides (main)> ls
+mrbhanuka@sliitmozilla.org Epstein-Files > ls
 ```
 
 ```bash
-mrbhanuka@sliitmozilla.org /m/h/D/D/P/m/i/slides (main)> ls
-assets/
-layouts/
-package.json
-slides/
-snippets/
-vite.config.ts
-components/
-node_modules/
-pnpm-lock.yaml
-slides.md
-uno.config.ts
+mrbhanuka@sliitmozilla.org Epstein-Files > ls
+Island_Logs/
+Private_Jet_Manifest/
+Secret_Contacts/
+CCTV_Footage/
+Melon_Eusk/
 ```
 ````
 
 ---
-layout: intro
+layout: intro-image-right
+image: 'assets/cd.webp'
 ---
 
 <h1 class="text-warmRed">Change Directory</h1>
 
 ````md magic-move {lines: true}
 ```bash {1}
-mrbhanuka@sliitmozilla.org /m/h/D/D/P/m/i/slides (main)> cd slides
+mrbhanuka@sliitmozilla.org Epstein-Files > 
 ```
 
 ```bash
-mrbhanuka@sliitmozilla.org /m/h/D/D/P/m/i/slides (main)> cd slides
-mrbhanuka@sliitmozilla.org /m/h/D/D/P/m/i/s/slides (main)>
-```
-
-```bash
-mrbhanuka@sliitmozilla.org /m/h/D/D/P/m/i/slides (main)> cd slides
-mrbhanuka@sliitmozilla.org /m/h/D/D/P/m/i/s/slides (main)> ls
-escape.md
-freedom.md
-history.md
-roast_windows+mac_users.md
-welcome.md
-why_switching_2_linux.md
+mrbhanuka@sliitmozilla.org Epstein-Files > z mel 
+mrbhanuka@sliitmozilla.org E/Melon_Eusk > 
 ```
 ````
 
@@ -67,33 +55,47 @@ layout: intro
 
 ````md magic-move {lines: true}
 ```bash {1}
-mrbhanuka@sliitmozilla.org /m/h/D/D/P/m/i/slides (main)> cat roast_windows+mac_users.md
+mrbhanuka@sliitmozilla.org E/Melon_Eusk >  
 ```
 
 ```bash
-mrbhanuka@sliitmozilla.org /m/h/D/D/P/m/i/slides (main)> cd roast_windows+mac_users.md
----
-layout: intro-image-right
-image: 'assets/mac-user.png'
----
+mrbhanuka@sliitmozilla.org E/Melon_Eusk > cat grok.txt
 
-# A Typical Mac User
-`@grok Why is Mac better than Windows?`
+[INTERNAL_X_LEAK]: 
+"Yo Jeff..,,, ,u. still g.t anymore pho,.* left? 
+Grok's v,si.n m.del is st,ll lagg,ng.
+```
 
----
-layout: intro-video
-video: 'assets/fuck_ms_fuck.webm'
----
+```bash
+mrbhanuka@sliitmozilla.org E/Melon_Eusk > cat grok.txt
 
-<div class="absolute bottom-10 left-10 text-right">
-    <h2>props to <a href="https://www.imdb.com/title/tt9612516/" class="text-lemonYellow">Space Force</a></h2>
-</div>
+[INTERNAL_X_LEAK]: 
+"Yo Jeff..,,, ,u. still g.t anymore pho,.* left? 
+Grok's v,si.n m.del is st,ll lagg,ng.
+
+mrbhanuka@sliitmozilla.org E/Melon_Eusk > cat > grok.txt
+not g.t any more pho,.* left.
+```
+
+```bash
+mrbhanuka@sliitmozilla.org E/Melon_Eusk > cat grok.txt
+
+[INTERNAL_X_LEAK]: 
+"Yo Jeff..,,, ,u. still g.t anymore pho,.* left? 
+Grok's v,si.n m.del is st,ll lagg,ng.
+
+mrbhanuka@sliitmozilla.org E/Melon_Eusk > cat > grok.txt
+not g.t any more pho,.* left.
+
+mrbhanuka@sliitmozilla.org E/Melon_Eusk > cat grok1.txt grok2.txt > grok3.txt
 ```
 ````
 
 ---
-layout: bullets
+layout: image-right
+image: 'assets/todo.webp'
 ---
+<h1 class="text-lemonYellow">$less is_more</h1>
 
 * `cp`
 * `mv`
@@ -104,3 +106,9 @@ layout: bullets
 * `touch`
 * `find`
 * `help` me `man`
+* `less` is `more`
+
+---
+layout: image
+image: 'assets/credits.webp'
+---

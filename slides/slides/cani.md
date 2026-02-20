@@ -9,3 +9,8 @@ image: 'assets/canI.webp'
 * Can I play games?
 * Can I use my hardware?
 * Can I connect to the sliit wifi?
+
+<!--
+https://github.com/TibixDev/winboat
+https://usebottles.com/
+-->

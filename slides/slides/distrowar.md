@@ -24,14 +24,6 @@ image: 'assets/fedora.webp'
 
 ---
 layout: intro-image-right
-image: 'assets/fedora.webp'
----
-
-<h1 class="text-warmRed">Fedora 👒</h1>
-<p class="text-lemonYellow">The 2nd best distro in the world 🙏</p>
-
----
-layout: intro-image-right
 image: 'assets/ubuntu.webp'
 ---
 

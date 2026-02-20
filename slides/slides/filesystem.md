@@ -143,6 +143,12 @@ usr/
 ```
 
 ````
+
+<!--
+bin essential for entire os
+sbin bin that should only excute by root user
+-->
+
 ---
 layout: intro
 ---
@@ -222,14 +228,16 @@ usr/
 ```
 ````
 
+<!--
+shared libs, compiling and linkers
+-->
+
 ---
 layout: intro
 ---
 
 <h1 class="text-warmRed">
-  <span v-if="$slidev.nav.clicks < 5">
-    <span v-mark.strike.red="4">User System Resources</span>
-  </span>
+   User System Resources
 </h1>
 
 ````md magic-move {lines: true}
@@ -282,46 +290,11 @@ usr/
 ```
 ````
 
----
-layout: intro
----
+<!--
+non essential for the os it self but used buy users
 
-<h1 class="text-warmRed">
-    UNIX System Resources
-</h1>
-
-````md magic-move {lines: true}
-```bash{20}
-mrbhanuka@sliitmozilla.org / > ls
-bin@
-dev/
-home/
-lib64@
-mnt/
-proc/
-run/
-srv/
-tmp/
-var/
-boot/
-etc/
-lib@
-lost+found/
-opt/
-root/
-sbin@
-sys/
-usr/
-```
-```bash
-mrbhanuka@sliitmozilla.org / > ls /usr/
-```
-```bash
-mrbhanuka@sliitmozilla.org / > ls /usr/
-bin/  include/  lib/  lib32/  lib64@  local/  sbin@  share/  src/
-```
-````
-
+/local/bin user complied manually
+-->
 
 ---
 layout: statement
@@ -329,6 +302,11 @@ layout: statement
 
 <h1 class="text-lemonYellow">$PATH</h1>
 
+<!--
+all of these will mapped together with $PATH dir
+
+which
+-->
 
 ---
 layout: intro
@@ -415,6 +393,12 @@ mrbhanuka@sliitmozilla.org / > cat /etc/hosts
 ```
 ````
 
+<!--
+for config
+
+ET cetera
+-->
+
 ---
 layout: intro
 ---
@@ -491,6 +475,10 @@ mrbhanuka@sliitmozilla.org / > mrbhanuka@aspire3 /> ls /home/mrbhanuka/
 '2026-02-15 22-35-11.mp4'  '2026-02-16 00-03-16.mp4'   Downloads@   Pictures@
 ```
 ````
+
+<!--
+home for the all users
+-->
 
 ---
 layout: intro
@@ -631,6 +619,10 @@ audit/  dnscrypt-proxy@  lastlog   old/        private/  swtpm/
 btmp    journal/         libvirt/  pacman.log  README@   wtmp
 ```
 ````
+
+<!--
+varaibles
+-->
 
 ---
 layout: intro

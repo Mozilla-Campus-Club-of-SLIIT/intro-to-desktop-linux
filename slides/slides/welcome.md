@@ -6,6 +6,11 @@ layout: fact
 
 <AudioPlayer src="/assets/sudo_apt_get_roast.mp3" />
 
+<!--
+Good morning!!! I know it is afternoon, but all tech sessions should start with a good morning, it is the
+ tradition
+-->
+
 ---
 layout: intro-video
 video: 'assets/good_morning.webm'
@@ -20,7 +25,6 @@ video: 'assets/good_morning.webm'
 layout: intro-image-right
 image: 'assets/ceo.webp'
 ---
-
 
 <h1 class="text-lemonYellow">$whoami ?</h1>
 
@@ -58,3 +62,9 @@ mrbhanuka@sliitmozilla.org > fastfetch
 .`                                 `/    
 ```
 ````
+
+<!--
+mrbhanuka
+Co founder and ceo of myself
+And I use arch btw
+-->

@@ -20,6 +20,12 @@ mrbhanuka@sliitmozilla.org  /m/h/D/D/P/m/i/slides (main)> history
 ```
 ````
 
+<!--
+In 1969 
+unix well oved by both proff and unis
+but licenced under prop. AT&T licene
+-->
+
 ---
 layout: intro-image
 image: 'assets/ken&dennis.webp'
@@ -29,6 +35,12 @@ image: 'assets/ken&dennis.webp'
   <h1 class="text-lemonYellow">Ken Thompson, Dennis Ritchie</h1>
   <p class="text-warmRed">The Prehistoric Era: UNIX (1969)</p>
 </div>
+
+<!--
+In 1969 
+unix well oved by both proff and unis
+but licenced under prop. AT&T licene
+-->
 
 ---
 layout: intro-image
@@ -40,6 +52,10 @@ image: 'assets/BSD.webp'
   <p class="text-warmRed">University of California, Berkeley (1977)</p>
 </div>
 
+<!--
+create there own unix os and AT&T sued them
+-->
+
 ---
 layout: intro-image
 image: 'assets/richard_stallman.webp'
@@ -50,6 +66,12 @@ image: 'assets/richard_stallman.webp'
   <p class="text-warmRed">Richard Stallman starts <a href="https://www.gnu.org">GNU</a> (1983)</p>
 </div>
 
+<!--
+gnu project, free and open source replcement for unix
+
+recreate everything except the kernel
+-->
+
 ---
 layout: intro-image
 image: 'assets/linus.webp'
@@ -59,6 +81,11 @@ image: 'assets/linus.webp'
   <h1 class="text-lemonYellow"><a href="https://github.com/torvalds">Linus Torvalds 🗿</a></h1>
   <p class="text-warmRed">“software is like sex, it's better when it's free..”</p>
 </div>
+
+<!--
+in 1991 hobby os, freax, but system admin chnaged it to linux
+initially relased with a prop licene 00.01
+-->
 
 ---
 layout: image
@@ -80,6 +107,10 @@ image: 'assets/gpl.webp'
   <p class="text-warmRed">GPL license drops. The "Great Marriage" of GNU + Linux.</p>
 </div>
 
+<!--
+1992 GPL licene
+-->
+
 ---
 layout: intro-image-right
 image: 'assets/kernel.webp'
@@ -88,6 +119,9 @@ image: 'assets/kernel.webp'
 <h1 class="text-lemonYellow">Kernel ?</h1>
 <h2 class="text-warmRed">and why gnu+linux?</h2>
 
+<!--
+bridge between hardware and application
+-->
 
 ---
 layout: image

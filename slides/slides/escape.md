@@ -91,6 +91,10 @@ mrbhanuka@sliitmozilla.org E/Melon_Eusk > cat grok1.txt grok2.txt > grok3.txt
 ```
 ````
 
+<!--
+not only view but also create and copy, concatenate
+-->
+
 ---
 layout: image-right
 image: 'assets/todo.webp'

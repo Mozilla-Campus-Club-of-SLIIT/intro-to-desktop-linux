@@ -44,3 +44,7 @@ src: ./slides/filesystem.md
 ---
 src: ./slides/pacman.md
 ---
+
+---
+src: ./slides/managersDistros&flavours.md
+---

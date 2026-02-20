@@ -40,3 +40,7 @@ src: ./slides/escape.md
 ---
 src: ./slides/filesystem.md
 ---
+
+---
+src: ./slides/pacman.md
+---

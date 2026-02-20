@@ -52,3 +52,15 @@ src: ./slides/managersDistros&flavours.md
 ---
 src: ./slides/distrowar.md
 ---
+
+---
+src: ./slides/cani.md
+---
+
+---
+layout: intro-image-right
+image: 'assets/thankU.webp'
+---
+
+<h1 class="text-lemonYellow"><a href="https://music.youtube.com/watch?v=jyiLv8KeaUE&si=Z-3MBbn9Y6a4Ai2s">Thank You!</a></h1>
+<h2 class="text-warmRed">If you have any question feel free to ask <b>ChatGPT</b> 🙃</h2>

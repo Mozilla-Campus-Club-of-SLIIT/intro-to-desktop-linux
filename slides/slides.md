@@ -48,3 +48,7 @@ src: ./slides/pacman.md
 ---
 src: ./slides/managersDistros&flavours.md
 ---
+
+---
+src: ./slides/distrowar.md
+---

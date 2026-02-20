@@ -27,6 +27,7 @@ image: 'assets/p-pacman.webp'
 * apt
 * snap 🤮
 * flatpak
+* Appimage
 
 ---
 layout: intro
